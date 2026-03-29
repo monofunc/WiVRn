@@ -65,14 +65,16 @@ void wivrn::tracking_control::resolve(XrDuration frame_time, XrDuration latency)
 
 	wivrn::to_headset::tracking_control res{};
 
-	for (auto [device, req]: std::ranges::enumerate_view(reqs))
+	size_t device = 0;
+	for (auto & req: reqs)
 	{
+		auto device_idx = device++;
 		// Skip unset data
 		if (req.min_prediction > req.max_prediction)
 			continue;
 
 		XrDuration step = frame_time;
-		switch (device_id(device))
+		switch (device_id(device_idx))
 		{
 			// High frequency, but not extrapolation
 			case device_id::EYE_GAZE:
@@ -97,7 +99,7 @@ void wivrn::tracking_control::resolve(XrDuration frame_time, XrDuration latency)
 			// Face tracking can't extrapolate
 			case device_id::FACE:
 				res.pattern.push_back({
-				        .device = device_id(device),
+				        .device = device_id(device_idx),
 				        .prediction_ns = 0,
 				});
 				break;
@@ -105,13 +107,13 @@ void wivrn::tracking_control::resolve(XrDuration frame_time, XrDuration latency)
 				break;
 		}
 
-		req.min_prediction = std::clamp(req.min_prediction + latency, 0l, max_extrapolation_ns);
-		req.max_prediction = std::clamp(req.max_prediction + latency, 0l, max_extrapolation_ns);
+		req.min_prediction = std::clamp<int64_t>(req.min_prediction + latency, 0, max_extrapolation_ns);
+		req.max_prediction = std::clamp<int64_t>(req.max_prediction + latency, 0, max_extrapolation_ns);
 
 		for (int64_t t = req.min_prediction; t < req.max_prediction + step; t += step)
 		{
 			res.pattern.push_back({
-			        .device = device_id(device),
+			        .device = device_id(device_idx),
 			        .prediction_ns = t,
 			});
 		}

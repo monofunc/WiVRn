@@ -1,0 +1,143 @@
+From 5dc713a2b92c8a7d438b56cbe909ec0b7d7ba224 Mon Sep 17 00:00:00 2001
+From: Patrick Nicolas <patricknicolas@laposte.net>
+Date: Fri, 27 Mar 2026 02:23:12 +0400
+Subject: [PATCH] c/multi: early wake of compositor
+
+---
+ .../compositor/multi/comp_multi_compositor.c  | 14 +++++++
+ src/xrt/compositor/multi/comp_multi_private.h |  4 ++
+ src/xrt/compositor/multi/comp_multi_system.c  | 41 +++++++++++++++----
+ 3 files changed, 52 insertions(+), 7 deletions(-)
+
+diff --git a/src/xrt/compositor/multi/comp_multi_compositor.c b/src/xrt/compositor/multi/comp_multi_compositor.c
+index 80f2d6249..ea91a83c9 100644
+--- a/src/xrt/compositor/multi/comp_multi_compositor.c
++++ b/src/xrt/compositor/multi/comp_multi_compositor.c
+@@ -236,7 +236,21 @@ wait_for_scheduled_free(struct multi_compositor *mc)
+ 	os_mutex_lock(&mc->slot_lock);
+ 	slot_move_and_clear_locked(mc, &mc->scheduled, &mc->progress);
+ 	os_mutex_unlock(&mc->slot_lock);
++
++	bool done = true;
++	for (int k = 0; k < MULTI_MAX_CLIENTS && done; ++k) {
++		struct multi_compositor *m = mc->msc->clients[k];
++		if (m == NULL || !m->state.session_active)
++			continue;
++		os_mutex_lock(&m->slot_lock);
++		if (!time_is_within_half_ms(m->scheduled.data.display_time_ns, m->slot_next_frame_display))
++			done = false;
++		os_mutex_unlock(&m->slot_lock);
++	}
+ 	os_mutex_unlock(&mc->msc->list_and_timing_lock);
++
++	if (done)
++		os_cond_signal(&mc->msc->wake_cond);
+ }
+ 
+ static void *
+diff --git a/src/xrt/compositor/multi/comp_multi_private.h b/src/xrt/compositor/multi/comp_multi_private.h
+index 3351defa4..e8f0c8295 100644
+--- a/src/xrt/compositor/multi/comp_multi_private.h
++++ b/src/xrt/compositor/multi/comp_multi_private.h
+@@ -359,6 +359,10 @@ struct multi_system_compositor
+ 	 */
+ 	struct os_mutex list_and_timing_lock;
+ 
++
++	struct os_mutex wake_mutex;
++	struct os_cond wake_cond;
++
+ 	struct
+ 	{
+ 		int64_t predicted_display_time_ns;
+diff --git a/src/xrt/compositor/multi/comp_multi_system.c b/src/xrt/compositor/multi/comp_multi_system.c
+index aaf784d6c..662e73c1c 100644
+--- a/src/xrt/compositor/multi/comp_multi_system.c
++++ b/src/xrt/compositor/multi/comp_multi_system.c
+@@ -24,6 +24,8 @@
+ #include "util/u_trace_marker.h"
+ #include "util/u_distortion_mesh.h"
+ 
++#include "math/m_api.h"
++
+ #ifdef XRT_OS_LINUX
+ #include "util/u_linux.h"
+ #endif
+@@ -393,17 +395,35 @@ broadcast_timings_to_pacers(struct multi_system_compositor *msc,
+ }
+ 
+ static void
+-wait_frame(struct os_precise_sleeper *sleeper, struct xrt_compositor *xc, int64_t frame_id, int64_t wake_up_time_ns)
++wait_frame(struct multi_system_compositor *msc, struct xrt_compositor *xc, int64_t frame_id, int64_t wake_up_time_ns)
+ {
+ 	COMP_TRACE_MARKER();
+ 
+ 	// Wait until the given wake up time.
+-	u_wait_until(sleeper, wake_up_time_ns);
+-
+ 	int64_t now_ns = os_monotonic_get_ns();
+ 
+-	// Signal that we woke up.
+-	xrt_comp_mark_frame(xc, frame_id, XRT_COMPOSITOR_FRAME_POINT_WOKE, now_ns);
++	// Lets hope its not to late.
++	bool fuzzy_in_the_past = time_is_less_then_or_within_range(wake_up_time_ns, now_ns, U_TIME_1MS_IN_NS);
++
++	// When we should wake up is in the past:ish.
++	if (! fuzzy_in_the_past) {
++		os_mutex_lock(&msc->wake_mutex);
++#ifdef XRT_OS_LINUX
++		struct timespec wake_ts;
++		os_ns_to_timespec(wake_up_time_ns, &wake_ts);
++		pthread_cond_clockwait(&msc->wake_cond.cond, &msc->wake_mutex.mutex, CLOCK_MONOTONIC, &wake_ts);
++#else
++		int64_t wait_ns = wake_up_time_ns - now_ns;
++		if (wait_ns > 0) {
++			struct timespec rel_ts = {
++				.tv_sec = wait_ns / U_1_000_000_000,
++				.tv_nsec = wait_ns % U_1_000_000_000,
++			};
++			pthread_cond_timedwait_relative_np(&msc->wake_cond.cond, &msc->wake_mutex.mutex, &rel_ts);
++		}
++#endif
++		os_mutex_unlock(&msc->wake_mutex);
++	}
+ }
+ 
+ static void
+@@ -530,10 +550,13 @@ multi_main_loop(struct multi_system_compositor *msc)
+ 		broadcast_timings_to_clients(msc, predicted_display_time_ns);
+ 
+ 		// Now we can wait.
+-		wait_frame(&sleeper, xc, frame_id, wake_up_time_ns);
++		wait_frame(msc, xc, frame_id, wake_up_time_ns);
+ 
+ 		int64_t now_ns = os_monotonic_get_ns();
+-		int64_t diff_ns = predicted_display_time_ns - now_ns;
++		// Signal that we woke up.
++		xrt_comp_mark_frame(xc, frame_id, XRT_COMPOSITOR_FRAME_POINT_WOKE, now_ns);
++
++		int64_t diff_ns = predicted_display_time_ns - MAX(wake_up_time_ns, now_ns);
+ 
+ 		// Now we know the diff, broadcast to pacers.
+ 		broadcast_timings_to_pacers(msc, predicted_display_time_ns, predicted_display_period_ns, diff_ns);
+@@ -721,6 +744,8 @@ system_compositor_destroy(struct xrt_system_compositor *xsc)
+ 	xrt_comp_native_destroy(&msc->xcn);
+ 
+ 	os_mutex_destroy(&msc->list_and_timing_lock);
++	os_mutex_destroy(&msc->wake_mutex);
++	os_cond_destroy(&msc->wake_cond);
+ 
+ 	free(msc);
+ }
+@@ -775,6 +800,8 @@ comp_multi_create_system_compositor(struct xrt_compositor_native *xcn,
+ 	msc->sessions.state = do_warm_start ? MULTI_SYSTEM_STATE_INIT_WARM_START : MULTI_SYSTEM_STATE_STOPPED;
+ 
+ 	os_mutex_init(&msc->list_and_timing_lock);
++	os_mutex_init(&msc->wake_mutex);
++	os_cond_init(&msc->wake_cond);
+ 
+ 	//! @todo Make the clients not go from IDLE to READY before we have completed a first frame.
+ 	// Make sure there is at least some sort of valid frame data here.
+-- 
+2.50.1 (Apple Git-155)
+

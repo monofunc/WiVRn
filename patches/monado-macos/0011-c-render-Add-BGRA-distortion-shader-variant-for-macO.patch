@@ -1,0 +1,240 @@
+From bd487031aa72ca3669cc0584d56b0314bad3c416 Mon Sep 17 00:00:00 2001
+From: Mono <81423605+monofunc@users.noreply.github.com>
+Date: Wed, 1 Apr 2026 18:01:26 +0400
+Subject: [PATCH] c/render: Add BGRA distortion shader variant for macOS
+
+MoltenVK does not support multi-planar chroma-subsampled formats (NV12),
+so on macOS the compositor target uses VK_FORMAT_B8G8R8A8_UNORM instead.
+
+* Add output_bgra specialization constant to distortion.comp
+* Create both NV12 and BGRA pipeline variants at init time
+* Select pipeline based on target_format at dispatch time
+* BGRA path writes color directly (no rgb_to_ycbcr conversion)
+---
+ src/xrt/compositor/render/render_compute.c   | 12 ++--
+ src/xrt/compositor/render/render_interface.h |  6 ++
+ src/xrt/compositor/render/render_resources.c | 42 ++++++++++--
+ src/xrt/compositor/shaders/distortion.comp   | 69 ++++++++++++++------
+ 4 files changed, 98 insertions(+), 31 deletions(-)
+
+diff --git a/src/xrt/compositor/render/render_compute.c b/src/xrt/compositor/render/render_compute.c
+index 44c3f0aee..4231813a7 100644
+--- a/src/xrt/compositor/render/render_compute.c
++++ b/src/xrt/compositor/render/render_compute.c
+@@ -550,10 +550,14 @@ render_compute_projection(struct render_compute *render,
+ 	    render->shared_descriptor_set,    //
+ 	    render->r->view_count);           //
+ 
+-	vk->vkCmdBindPipeline(               //
+-	    r->cmd,                          //
+-	    VK_PIPELINE_BIND_POINT_COMPUTE,  // pipelineBindPoint
+-	    r->compute.distortion.pipeline); // pipeline
++	VkPipeline distortion_pipeline = (r->target_format == VK_FORMAT_B8G8R8A8_UNORM)
++	    ? r->compute.distortion.pipeline_bgra
++	    : r->compute.distortion.pipeline;
++
++	vk->vkCmdBindPipeline(              //
++	    r->cmd,                         //
++	    VK_PIPELINE_BIND_POINT_COMPUTE, // pipelineBindPoint
++	    distortion_pipeline);           // pipeline
+ 
+ 	vk->vkCmdBindDescriptorSets(               //
+ 	    r->cmd,                                //
+diff --git a/src/xrt/compositor/render/render_interface.h b/src/xrt/compositor/render/render_interface.h
+index a4b5c53a2..a1b11299a 100644
+--- a/src/xrt/compositor/render/render_interface.h
++++ b/src/xrt/compositor/render/render_interface.h
+@@ -328,6 +328,9 @@ struct render_resources
+ 	//! The count of views that we are rendering to.
+ 	uint32_t view_count;
+ 
++	//! The format of the compositor target (used to select shader variant).
++	VkFormat target_format;
++
+ 	//! Vulkan resources.
+ 	struct vk_bundle *vk;
+ 
+@@ -494,6 +497,9 @@ struct render_resources
+ 			//! Doesn't depend on target so is static.
+ 			VkPipeline pipeline;
+ 
++			//! BGRA variant for non-NV12 targets.
++			VkPipeline pipeline_bgra;
++
+ 			//! Target info.
+ 			struct render_buffer ubo;
+ 		} distortion;
+diff --git a/src/xrt/compositor/render/render_resources.c b/src/xrt/compositor/render/render_resources.c
+index 9a993dc81..30372b08f 100644
+--- a/src/xrt/compositor/render/render_resources.c
++++ b/src/xrt/compositor/render/render_resources.c
+@@ -351,15 +351,30 @@ create_compute_distortion_pipeline(struct vk_bundle *vk,
+                                    VkPipelineCache pipeline_cache,
+                                    VkShaderModule shader,
+                                    VkPipelineLayout pipeline_layout,
++                                   bool output_bgra,
+                                    VkPipeline *out_compute_pipeline)
+ {
++	VkBool32 bgra_val = output_bgra ? VK_TRUE : VK_FALSE;
++
++	VkSpecializationMapEntry entry = {
++	    .constantID = 0,
++	    .offset = 0,
++	    .size = sizeof(VkBool32),
++	};
++
++	VkSpecializationInfo specialization_info = {
++	    .mapEntryCount = 1,
++	    .pMapEntries = &entry,
++	    .dataSize = sizeof(VkBool32),
++	    .pData = &bgra_val,
++	};
+ 
+ 	return vk_create_compute_pipeline( //
+ 	    vk,                            // vk_bundle
+ 	    pipeline_cache,                // pipeline_cache
+ 	    shader,                        // shader
+ 	    pipeline_layout,               // pipeline_layout
+-	    NULL,                          // specialization_info
++	    &specialization_info,          // specialization_info
+ 	    out_compute_pipeline);         // out_compute_pipeline
+ }
+ 
+@@ -941,16 +956,28 @@ render_resources_init(struct render_resources *r,
+ 	VK_NAME_PIPELINE_LAYOUT(vk, r->compute.distortion.pipeline_layout,
+ 	                        "render_resources compute distortion pipeline layout");
+ 
+-	ret = create_compute_distortion_pipeline(  //
+-	    vk,                                    // vk_bundle
+-	    r->pipeline_cache,                     // pipeline_cache
+-	    r->shaders->distortion_comp,           // shader
+-	    r->compute.distortion.pipeline_layout, // pipeline_layout
+-	    &r->compute.distortion.pipeline);      // out_compute_pipeline
++	ret = create_compute_distortion_pipeline(       //
++	    vk,                                         // vk_bundle
++	    r->pipeline_cache,                          // pipeline_cache
++	    r->shaders->distortion_comp,                // shader
++	    r->compute.distortion.pipeline_layout,      // pipeline_layout
++	    false,                                      // output_bgra
++	    &r->compute.distortion.pipeline);           // out_compute_pipeline
+ 	VK_CHK_WITH_RET(ret, "create_compute_distortion_pipeline", false);
+ 
+ 	VK_NAME_PIPELINE(vk, r->compute.distortion.pipeline, "render_resources compute distortion pipeline");
+ 
++	ret = create_compute_distortion_pipeline(       //
++	    vk,                                         // vk_bundle
++	    r->pipeline_cache,                          // pipeline_cache
++	    r->shaders->distortion_comp,                // shader
++	    r->compute.distortion.pipeline_layout,      // pipeline_layout
++	    true,                                       // output_bgra
++	    &r->compute.distortion.pipeline_bgra);      // out_compute_pipeline
++	VK_CHK_WITH_RET(ret, "create_compute_distortion_pipeline (bgra)", false);
++
++	VK_NAME_PIPELINE(vk, r->compute.distortion.pipeline_bgra, "render_resources compute distortion pipeline (bgra)");
++
+ 	size_t distortion_ubo_size = sizeof(struct render_compute_distortion_ubo_data);
+ 
+ 	ret = render_buffer_init(       //
+@@ -1081,6 +1108,7 @@ render_resources_fini(struct render_resources *r)
+ 
+ 	D(DescriptorSetLayout, r->compute.distortion.descriptor_set_layout);
+ 	D(Pipeline, r->compute.distortion.pipeline);
++	D(Pipeline, r->compute.distortion.pipeline_bgra);
+ 	D(PipelineLayout, r->compute.distortion.pipeline_layout);
+ 
+ 	D(Pipeline, r->compute.clear.pipeline);
+diff --git a/src/xrt/compositor/shaders/distortion.comp b/src/xrt/compositor/shaders/distortion.comp
+index df2b612b0..ab11c0075 100644
+--- a/src/xrt/compositor/shaders/distortion.comp
++++ b/src/xrt/compositor/shaders/distortion.comp
+@@ -9,6 +9,8 @@
+ 
+ #include "srgb.inc.glsl"
+ 
++layout(constant_id = 0) const bool output_bgra = false;
++
+ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+ 
+ #define MAX_DIM 4097
+@@ -79,31 +81,58 @@ void main()
+ 		}
+ 	}
+ 	colour /= count;
+-	colour.xyz = rgb_to_ycbcr(from_linear_to_srgb(colour.rgb));
++	vec3 srgb = from_linear_to_srgb(colour.rgb);
+ 
+-	imageStore(luma, ivec3(ix, iy, iz), vec4(colour.x));
++	if (output_bgra) {
++		imageStore(luma, ivec3(ix, iy, iz), vec4(srgb, colour.a));
+ 
+-	vec4 sum = colour;
+-	for (uint i = 0 ; i < gl_SubgroupSize; ++i)
+-	{
+-		uvec3 other = subgroupShuffle(gl_GlobalInvocationID, i);
+-		vec4 c = subgroupShuffle(colour, i);
+-		if (
+-			other == gl_GlobalInvocationID + uvec3(1, 0, 0)
+-			|| other == gl_GlobalInvocationID + uvec3(0, 1, 0)
+-			|| other == gl_GlobalInvocationID + uvec3(1, 1, 0))
++		// 2x2 average for half-res alpha in layer 2
++		vec4 sum = colour;
++		for (uint i = 0 ; i < gl_SubgroupSize; ++i)
+ 		{
+-			sum += c;
++			uvec3 other = subgroupShuffle(gl_GlobalInvocationID, i);
++			vec4 c = subgroupShuffle(colour, i);
++			if (
++				other == gl_GlobalInvocationID + uvec3(1, 0, 0)
++				|| other == gl_GlobalInvocationID + uvec3(0, 1, 0)
++				|| other == gl_GlobalInvocationID + uvec3(1, 1, 0))
++			{
++				sum += c;
++			}
+ 		}
+-	}
++		if (ix %2 == 0 && iy %2 == 0)
++		{
++			float a = sum.w / 4.0;
++			imageStore(luma, ivec3(offset.xy/2 + gl_GlobalInvocationID.xy/2, 2), vec4(a, a, a, 1));
++		}
++	} else {
++		colour.xyz = rgb_to_ycbcr(srgb);
+ 
+-	if (ix %2 == 0 && iy %2 == 0)
+-	{
+-		// actual chroma
+-		imageStore(chroma, ivec3(gl_GlobalInvocationID.xy/2, iz), vec4(sum.y, sum.z, 0, 0) / 4);
++		imageStore(luma, ivec3(ix, iy, iz), vec4(colour.x));
+ 
+-		// alpha in luma
+-		imageStore(luma, ivec3(offset.xy/2 + gl_GlobalInvocationID.xy/2, 2), vec4(sum.w, 0, 0, 0) / 4);
+-		imageStore(chroma, ivec3(offset.xy/2 + gl_GlobalInvocationID.xy/2, 2), vec4(0.5, 0.5, 0, 0));
++		// 2x2 average for chroma subsampling and alpha
++		vec4 sum = colour;
++		for (uint i = 0 ; i < gl_SubgroupSize; ++i)
++		{
++			uvec3 other = subgroupShuffle(gl_GlobalInvocationID, i);
++			vec4 c = subgroupShuffle(colour, i);
++			if (
++				other == gl_GlobalInvocationID + uvec3(1, 0, 0)
++				|| other == gl_GlobalInvocationID + uvec3(0, 1, 0)
++				|| other == gl_GlobalInvocationID + uvec3(1, 1, 0))
++			{
++				sum += c;
++			}
++		}
++
++		if (ix %2 == 0 && iy %2 == 0)
++		{
++			// actual chroma
++			imageStore(chroma, ivec3(gl_GlobalInvocationID.xy/2, iz), vec4(sum.y, sum.z, 0, 0) / 4);
++
++			// alpha in luma
++			imageStore(luma, ivec3(offset.xy/2 + gl_GlobalInvocationID.xy/2, 2), vec4(sum.w, 0, 0, 0) / 4);
++			imageStore(chroma, ivec3(offset.xy/2 + gl_GlobalInvocationID.xy/2, 2), vec4(0.5, 0.5, 0, 0));
++		}
+ 	}
+ }
+-- 
+2.50.1 (Apple Git-155)
+

@@ -73,10 +73,114 @@ set(XRT_HAVE_SYSTEM_CJSON            OFF)
 set(XRT_IPC_MSG_SOCK_FILENAME     "wivrn/comp_ipc" CACHE STRING "Service socket filename")
 set(XRT_IPC_SERVICE_PID_FILENAME  "wivrn.pid"      CACHE STRING "Service pidfile filename")
 set(XRT_OXR_RUNTIME_SUFFIX        "wivrn"          CACHE STRING "OpenXR client library suffix")
+set(XRT_IPC_MACH_SERVICE_NAME     "org.wivrn.compositor" CACHE STRING "Mach service name for the IPC broker" FORCE)
 
 FetchContent_MakeAvailable(monado)
 
-if (WIVRN_BUILD_SERVER)
+if(APPLE)
+	target_compile_definitions(ipc_server PRIVATE "XRT_IPC_MACH_SERVICE_NAME=\"org.wivrn.compositor\"")
+	target_compile_definitions(ipc_client PRIVATE "XRT_IPC_MACH_SERVICE_NAME=\"org.wivrn.compositor\"")
+endif()
+
+if (APPLE AND WIVRN_BUILD_SERVER)
+	add_executable(wivrn-compositor
+		accept_connection.cpp
+		compositor_bootstrap.cpp
+		compositor_main.cpp
+		hostname_macos.cpp
+		ipc_server_cb.cpp
+		target_instance_wivrn.cpp
+		wivrn_ipc.cpp
+
+		audio/audio_setup.cpp
+
+		encoder/encoder_settings.cpp
+		encoder/idr_handler.cpp
+		encoder/video_encoder.cpp
+		encoder/video_encoder_raw.cpp
+
+		driver/app_pacer.cpp
+		driver/clock_offset.cpp
+		driver/configuration.cpp
+		driver/hand_joints_list.cpp
+		driver/pose_list.cpp
+		driver/tracking_control.cpp
+		driver/view_list.cpp
+		driver/wivrn_hmd.cpp
+		driver/wivrn_pacer.cpp
+		driver/wivrn_comp_target.cpp
+		driver/wivrn_controller.cpp
+		driver/wivrn_eye_tracker.cpp
+		driver/wivrn_android_face_tracker.cpp
+		driver/wivrn_fb_face2_tracker.cpp
+		driver/wivrn_htc_face_tracker.cpp
+		driver/wivrn_generic_tracker.cpp
+		driver/wivrn_foveation.cpp
+		driver/wivrn_uinput_macos.cpp
+		driver/wivrn_session.cpp
+		driver/wivrn_connection.cpp
+		driver/xrt_cast.cpp
+
+		utils/wivrn_vk_bundle.cpp
+	)
+	target_compile_features(wivrn-compositor PRIVATE cxx_std_23)
+	target_compile_definitions(wivrn-compositor PRIVATE VULKAN_HPP_NO_CONSTRUCTORS)
+	target_include_directories(wivrn-compositor SYSTEM PRIVATE ${monado_SOURCE_DIR}/src/xrt/compositor/)
+	target_include_directories(wivrn-compositor PRIVATE .)
+	target_link_libraries(wivrn-compositor PRIVATE
+		CLI11::CLI11 xrt-external-renderdoc
+		aux_os aux_util aux_vk comp_main ipc_server
+		xrt-external-openxr xrt-interfaces
+		Eigen3::Eigen
+		wivrn-common wivrn-common-server wivrn-external
+		nlohmann_json::nlohmann_json
+		"-framework CoreFoundation"
+	)
+	target_compile_definitions(wivrn-compositor PRIVATE JSON_DIAGNOSTICS=1)
+
+	if(WIVRN_USE_VIDEOTOOLBOX)
+		target_sources(wivrn-compositor PRIVATE
+			encoder/video_encoder_videotoolbox.mm
+		)
+		target_link_libraries(wivrn-compositor PRIVATE
+			"-framework VideoToolbox"
+			"-framework CoreMedia"
+			"-framework CoreVideo"
+			"-framework IOSurface"
+		)
+	endif()
+
+	add_executable(wivrn-server
+		accept_connection.cpp
+		active_runtime.cpp
+		bonjour_publisher.cpp
+		compositor_bootstrap.cpp
+		hostname_macos.cpp
+		main_macos.mm
+		sleep_inhibitor_iokit.cpp
+		start_application_macos.cpp
+		wivrn_ipc.cpp
+		driver/configuration.cpp
+		driver/wivrn_connection.cpp
+	)
+	target_compile_features(wivrn-server PRIVATE cxx_std_23)
+	target_compile_definitions(wivrn-server PRIVATE VULKAN_HPP_NO_CONSTRUCTORS)
+	target_include_directories(wivrn-server PRIVATE .)
+	target_link_libraries(wivrn-server PRIVATE
+		CLI11::CLI11
+		Eigen3::Eigen
+		aux_util
+		xrt-external-openxr xrt-interfaces
+		wivrn-common wivrn-common-server wivrn-external
+		nlohmann_json::nlohmann_json
+		"-framework CoreFoundation"
+		"-framework IOKit"
+	)
+	target_compile_definitions(wivrn-server PRIVATE JSON_DIAGNOSTICS=1)
+
+	install(TARGETS wivrn-server wivrn-compositor)
+
+elseif (WIVRN_BUILD_SERVER)
 	add_executable(wivrn-server
 			accept_connection.cpp
 			active_runtime.cpp

@@ -1,3 +1,15 @@
+> [!WARNING]
+> This is a vibe-coded macOS port of WiVRn. Only bare minimum features are implemented, it is very fragile and has not been thoroughly tested. Use at your own risk.
+
+Known issues:
+
+* No audio forwarding to headset
+* Headset must connect before launching any app
+* No GUI
+* No encryption
+
+---
+
 <h1 align="center"> WiVRn </h1>
 
 <div align="center">

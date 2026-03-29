@@ -82,6 +82,13 @@ public:
 		return fd;
 	}
 
+	int release()
+	{
+		int tmp = fd;
+		fd = -1;
+		return tmp;
+	}
+
 	operator bool() const
 	{
 		return fd != -1;

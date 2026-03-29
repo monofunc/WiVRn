@@ -50,9 +50,26 @@ option(WIVRN_USE_NVENC "Enable nvenc (Nvidia) hardware encoder" ON)
 option(WIVRN_USE_VAAPI "Enable vaapi (AMD/Intel) hardware encoder" ON)
 option(WIVRN_USE_VULKAN_ENCODE "Enable vulkan video encoder" ON)
 option(WIVRN_USE_X264 "Enable x264 software encoder" ON)
+option(WIVRN_USE_VIDEOTOOLBOX "Enable VideoToolbox (Apple) hardware encoder" OFF)
 
 option(WIVRN_USE_PIPEWIRE "Enable pipewire backend" ON)
 option(WIVRN_USE_PULSEAUDIO "Enable pulseaudio backend" OFF)
+
+if(APPLE)
+    set(WIVRN_USE_VIDEOTOOLBOX ON CACHE BOOL "" FORCE)
+    set(WIVRN_USE_NVENC OFF CACHE BOOL "" FORCE)
+    set(WIVRN_USE_VAAPI OFF CACHE BOOL "" FORCE)
+    set(WIVRN_USE_VULKAN_ENCODE OFF CACHE BOOL "" FORCE)
+    set(WIVRN_USE_X264 OFF CACHE BOOL "" FORCE)
+    set(WIVRN_USE_PIPEWIRE OFF CACHE BOOL "" FORCE)
+    set(WIVRN_USE_PULSEAUDIO OFF CACHE BOOL "" FORCE)
+    set(WIVRN_USE_SYSTEMD OFF CACHE BOOL "" FORCE)
+    set(WIVRN_BUILD_DASHBOARD OFF CACHE BOOL "" FORCE)
+    set(WIVRN_BUILD_WIVRNCTL OFF CACHE BOOL "" FORCE)
+    set(WIVRN_BUILD_SERVER_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(WIVRN_FEATURE_STEAMVR_LIGHTHOUSE OFF CACHE BOOL "" FORCE)
+    set(WIVRN_FEATURE_SOLARXR OFF CACHE BOOL "" FORCE)
+endif()
 
 set(OVR_COMPAT_SEARCH_PATH "/opt/xrizer:/usr/local/lib/OpenComposite:/usr/lib/OpenComposite:/opt/OpenComposite:/opt/opencomposite"
     CACHE STRING "List of places to search for the OpenVR compatibility layer, separated by :")
@@ -109,13 +126,12 @@ if (WIVRN_USE_SYSTEM_BOOST AND NEED_COMMON)
 endif()
 
 if (WIVRN_BUILD_SERVER)
-    find_program(GDBUS_CODEGEN gdbus-codegen REQUIRED)
     if (Vulkan_VERSION  VERSION_LESS "1.3.261")
         message(FATAL_ERROR "Vulkan version must be at least 1.3.261, found ${Vulkan_VERSION}")
     endif()
 
-    if (NOT WIVRN_USE_NVENC AND NOT WIVRN_USE_VAAPI AND NOT WIVRN_USE_X264 AND NOT WIVRN_USE_VULKAN_ENCODE)
-        message(FATAL_ERROR "No encoder selected, use at least one of WIVRN_USE_NVENC, WIVRN_USE_VAAPI, WIVRN_USE_VULKAN_ENCODE or WIVRN_USE_X264")
+    if (NOT WIVRN_USE_NVENC AND NOT WIVRN_USE_VAAPI AND NOT WIVRN_USE_X264 AND NOT WIVRN_USE_VULKAN_ENCODE AND NOT WIVRN_USE_VIDEOTOOLBOX)
+        message(FATAL_ERROR "No encoder selected, use at least one of WIVRN_USE_NVENC, WIVRN_USE_VAAPI, WIVRN_USE_VULKAN_ENCODE, WIVRN_USE_X264 or WIVRN_USE_VIDEOTOOLBOX")
     endif()
 
     if (WIVRN_USE_VAAPI)
@@ -145,14 +161,16 @@ if (WIVRN_BUILD_SERVER)
         pkg_check_modules(libpulse REQUIRED IMPORTED_TARGET libpulse)
     endif()
 
-    pkg_check_modules(AVAHI REQUIRED IMPORTED_TARGET avahi-client avahi-glib)
     find_package(Eigen3 REQUIRED)
     find_package(nlohmann_json REQUIRED)
     find_package(CLI11 REQUIRED)
 
-    pkg_check_modules(glib2 REQUIRED IMPORTED_TARGET glib-2.0 gio-2.0 gio-unix-2.0)
-
-    pkg_check_modules(libnotify REQUIRED IMPORTED_TARGET libnotify)
+    if (NOT APPLE)
+        find_program(GDBUS_CODEGEN gdbus-codegen REQUIRED)
+        pkg_check_modules(AVAHI REQUIRED IMPORTED_TARGET avahi-client avahi-glib)
+        pkg_check_modules(glib2 REQUIRED IMPORTED_TARGET glib-2.0 gio-2.0 gio-unix-2.0)
+        pkg_check_modules(libnotify REQUIRED IMPORTED_TARGET libnotify)
+    endif()
 endif()
 
 if (WIVRN_BUILD_DASHBOARD OR WIVRN_BUILD_SERVER)
@@ -266,17 +284,28 @@ FetchContent_Declare(curl          EXCLUDE_FROM_ALL SYSTEM URL https://github.co
 FetchContent_Declare(spirv-reflect EXCLUDE_FROM_ALL SYSTEM URL https://github.com/KhronosGroup/SPIRV-Reflect/archive/refs/tags/vulkan-sdk-1.4.328.1.tar.gz
                                    URL_HASH SHA256=77f4b5b5630d960d7c17e39ddd5bf2e7dd62e6d8da24259ed14ca5b59783ea35)
 
-file(GLOB MONADO_PATCHES CONFIGURE_DEPENDS patches/monado/*)
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS monado-rev)
-file(STRINGS monado-rev MONADO_REV)
-# Server dependencies
-FetchContent_Declare(monado
-    GIT_REPOSITORY   https://gitlab.freedesktop.org/monado/monado.git
-    # The flatpak manifest is updated automatically
-    GIT_TAG          ${MONADO_REV}
-    PATCH_COMMAND    ${CMAKE_CURRENT_LIST_DIR}/patches/apply.sh ${MONADO_PATCHES}
-    EXCLUDE_FROM_ALL
-)
+if(APPLE)
+    file(GLOB MONADO_MACOS_PATCHES CONFIGURE_DEPENDS patches/monado-macos/*)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS monado-macos-rev)
+    file(STRINGS monado-macos-rev MONADO_MACOS_REV)
+    FetchContent_Declare(monado
+        GIT_REPOSITORY   https://github.com/monofunc/monado.git
+        GIT_TAG          ${MONADO_MACOS_REV}
+        PATCH_COMMAND    ${CMAKE_CURRENT_LIST_DIR}/patches/apply.sh ${MONADO_MACOS_PATCHES}
+        EXCLUDE_FROM_ALL
+    )
+else()
+    file(GLOB MONADO_PATCHES CONFIGURE_DEPENDS patches/monado/*)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS monado-rev)
+    file(STRINGS monado-rev MONADO_REV)
+    FetchContent_Declare(monado
+        GIT_REPOSITORY   https://gitlab.freedesktop.org/monado/monado.git
+        # The flatpak manifest is updated automatically
+        GIT_TAG          ${MONADO_REV}
+        PATCH_COMMAND    ${CMAKE_CURRENT_LIST_DIR}/patches/apply.sh ${MONADO_PATCHES}
+        EXCLUDE_FROM_ALL
+    )
+endif()
 
 add_custom_target(wivrn-version ALL
     COMMAND ${CMAKE_COMMAND}
@@ -306,10 +335,11 @@ if (WIVRN_BUILD_SERVER OR WIVRN_BUILD_SERVER_LIBRARY)
 
     if (WIVRN_BUILD_SERVER)
         message(STATUS "Selected encoders:")
-        message(STATUS "\tNVENC : ${WIVRN_USE_NVENC}")
-        message(STATUS "\tVAAPI : ${WIVRN_USE_VAAPI}")
-        message(STATUS "\tVulkan: ${WIVRN_USE_VULKAN_ENCODE}")
-        message(STATUS "\tx264  : ${WIVRN_USE_X264}")
+        message(STATUS "\tNVENC        : ${WIVRN_USE_NVENC}")
+        message(STATUS "\tVAAPI        : ${WIVRN_USE_VAAPI}")
+        message(STATUS "\tVulkan       : ${WIVRN_USE_VULKAN_ENCODE}")
+        message(STATUS "\tx264         : ${WIVRN_USE_X264}")
+        message(STATUS "\tVideoToolbox : ${WIVRN_USE_VIDEOTOOLBOX}")
         message(STATUS "")
         message(STATUS "Audio backends:")
         message(STATUS "\tPipewire  : ${WIVRN_USE_PIPEWIRE}")

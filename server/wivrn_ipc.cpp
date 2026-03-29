@@ -41,9 +41,15 @@ std::optional<to_monado::packets> receive_from_main()
 
 void init_cleanup_functions()
 {
+#ifdef __APPLE__
+	auto * p = new std::remove_pointer_t<decltype(cleanup_functions)>{};
+	delete cleanup_functions;
+	cleanup_functions = p;
+#else
 	if (cleanup_functions)
 		munmap(cleanup_functions, sizeof(*cleanup_functions));
 	cleanup_functions = (decltype(cleanup_functions))mmap(nullptr, sizeof(*cleanup_functions), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, 0, 0);
+#endif
 
 	std::fill(cleanup_functions->begin(), cleanup_functions->end(), cleanup_function{});
 }
@@ -78,6 +84,14 @@ void run_cleanup_functions()
 	if (std::ranges::all_of(*cleanup_functions, [](auto & i) { return i.callback == nullptr; }))
 		return;
 
+#ifdef __APPLE__
+	for (auto & i: *cleanup_functions)
+	{
+		if (i.callback)
+			i.callback(i.userdata);
+		i = {};
+	}
+#else
 	// Fork because pulseaudio doesn't like being initialized in the parent and the child
 	// of a fork, and ipc_server_main() is called in a child process
 	pid_t child = fork();
@@ -103,4 +117,5 @@ void run_cleanup_functions()
 		int wstatus = 0;
 		waitpid(child, &wstatus, 0);
 	}
+#endif
 }

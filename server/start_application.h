@@ -18,12 +18,15 @@
 #pragma once
 
 #include <functional>
-#include <glib.h>
 #include <optional>
 #include <string>
 #include <sys/types.h>
 #include <unordered_map>
 #include <vector>
+
+#ifndef __APPLE__
+#include <glib.h>
+#endif
 
 namespace wivrn
 {
@@ -41,6 +44,9 @@ public:
 	virtual void stop() = 0;
 };
 
+void display_child_status(int wstatus, const std::string & name);
+
+#ifndef __APPLE__
 // Start applications using fork+exec
 class forked_children : public children_manager
 {
@@ -63,6 +69,5 @@ public:
 
 	void stop() override;
 };
-
-void display_child_status(int wstatus, const std::string & name);
+#endif
 } // namespace wivrn

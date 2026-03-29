@@ -47,6 +47,14 @@ std::vector<std::filesystem::path> active_runtime::manifest_path()
 {
 	const std::filesystem::path location = "share/openxr/1";
 	const std::filesystem::path prefix = "openxr_wivrn";
+
+#ifdef __APPLE__
+	auto dev_manifest = std::filesystem::path(WIVRN_INSTALL_PREFIX).parent_path() / "openxr_wivrn-dev.json";
+	if (std::filesystem::exists(dev_manifest))
+		return {dev_manifest};
+
+	return filter_files(WIVRN_INSTALL_PREFIX / location, prefix);
+#else
 	// Check if in a flatpak
 	if (auto path = flatpak_key(flatpak::section::instance, "app-path"))
 		return {*path / location / "openxr_wivrn.json"};
@@ -59,6 +67,7 @@ std::vector<std::filesystem::path> active_runtime::manifest_path()
 
 	// Assume we are installed
 	return filter_files(WIVRN_INSTALL_PREFIX / location, prefix);
+#endif
 }
 
 std::filesystem::path active_runtime::openvr_compat_path()
@@ -171,6 +180,7 @@ active_runtime::active_runtime() :
 		}
 	}
 
+#ifndef __APPLE__
 	try
 	{
 		auto ovr_compat = openvr_compat_path();
@@ -193,6 +203,7 @@ active_runtime::active_runtime() :
 	{
 		std::cerr << "Cannot set active OpenVR runtime: " << e.what() << std::endl;
 	}
+#endif // !__APPLE__
 }
 
 active_runtime::~active_runtime()
@@ -212,6 +223,7 @@ active_runtime::~active_runtime()
 		}
 	}
 
+#ifndef __APPLE__
 	try
 	{
 		if (not openvr_manifest.empty())
@@ -224,5 +236,6 @@ active_runtime::~active_runtime()
 	{
 		std::cerr << "Cannot unset active OpenVR runtime: " << e.what() << std::endl;
 	}
+#endif
 }
 } // namespace wivrn

@@ -47,8 +47,9 @@ static const double passthrough_bitrate_factor = 0.05;
 static void split_bitrate(std::array<wivrn::encoder_settings, 3> & encoders, uint64_t bitrate)
 {
 	double total_weight = 0;
-	for (auto [i, encoder]: std::ranges::enumerate_view(encoders))
+	for (size_t i = 0; i < encoders.size(); ++i)
 	{
+		auto & encoder = encoders[i];
 		double w = encoder.width * encoder.height;
 		if (i == 2)
 			w *= passthrough_bitrate_factor;
@@ -267,6 +268,16 @@ public:
 			}
 		}
 #endif
+#if WIVRN_USE_VIDEOTOOLBOX
+		if (config.name.empty() or config.name == encoder_videotoolbox)
+		{
+			for (auto codec: config.codec ? std::vector{*config.codec} : std::vector<video_codec>{h265, h264})
+			{
+				if (std::ranges::contains(info.supported_codecs, codec))
+					return {encoder_videotoolbox, codec};
+			}
+		}
+#endif
 		U_LOG_W("No suitable hardware accelerated codec found");
 #if WIVRN_USE_X264
 		if (config.name.empty() or config.name == encoder_x264)
@@ -313,8 +324,9 @@ std::array<encoder_settings, 3> get_encoder_settings(wivrn_vk_bundle & bundle, c
 	for (size_t i = 0; i < 2; ++i)
 		check_video_size(res[i].encoder_name, res[i].codec, width, height);
 
-	for (auto [i, dst]: std::ranges::enumerate_view(res))
+	for (size_t i = 0; i < res.size(); ++i)
 	{
+		auto & dst = res[i];
 		dst.width = width;
 		dst.height = height;
 		if (i == 2) // alpha channel
@@ -326,11 +338,16 @@ std::array<encoder_settings, 3> get_encoder_settings(wivrn_vk_bundle & bundle, c
 	if (bit_depth and bit_depth != 8 and bit_depth != 10)
 		throw std::runtime_error("invalid bit-depth setting. supported values: 8, 10");
 
+#if WIVRN_USE_VIDEOTOOLBOX
+	// VideoToolbox encodes from BGRA8 surfaces (no 10-bit input path)
+	bit_depth = 8;
+#else
 	if (std::ranges::contains(res, video_codec::h264, &encoder_settings::codec) or
 	    std::ranges::contains(res, video_codec::raw, &encoder_settings::codec))
 		bit_depth = 8;
 	else if (not bit_depth)
 		bit_depth = 10;
+#endif
 
 	auto check_format = [&](vk::Format format) {
 		try

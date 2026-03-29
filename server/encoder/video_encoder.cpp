@@ -42,6 +42,9 @@
 #include "video_encoder_vulkan_h265.h"
 #endif
 #include "video_encoder_raw.h"
+#if WIVRN_USE_VIDEOTOOLBOX
+#include "video_encoder_videotoolbox.h"
+#endif
 
 namespace wivrn
 {
@@ -151,6 +154,13 @@ std::unique_ptr<video_encoder> video_encoder::create(
 		throw std::runtime_error("vaapi support not enabled");
 #endif
 	}
+
+#if WIVRN_USE_VIDEOTOOLBOX
+	if (settings.encoder_name == encoder_videotoolbox)
+	{
+		res = std::make_unique<video_encoder_videotoolbox>(wivrn_vk, settings, stream_idx);
+	}
+#endif
 
 	if (settings.encoder_name == encoder_raw)
 	{

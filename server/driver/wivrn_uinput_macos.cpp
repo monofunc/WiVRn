@@ -1,6 +1,6 @@
 /*
  * WiVRn VR streaming
- * Copyright (C) 2024  Guillaume Meunier <guillaume.meunier@centraliens.net>
+ * Copyright (C) 2026 Mono <81423605+monofunc@users.noreply.github.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,19 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#include "wivrn_uinput.h"
 
-#include <cstdint>
+wivrn_uinput::wivrn_uinput() {}
 
-class sleep_inhibitor
-{
-#ifdef __APPLE__
-	uint32_t assertion_id = 0; // IOPMAssertionID
-#else
-	int fd = -1;
-#endif
-
-public:
-	sleep_inhibitor();
-	~sleep_inhibitor();
-};
+void wivrn_uinput::handle_input(wivrn::from_headset::hid::input &) {}

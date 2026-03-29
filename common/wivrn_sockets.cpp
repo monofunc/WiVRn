@@ -22,6 +22,21 @@
 #include "crypto.h"
 #include <algorithm>
 #include <arpa/inet.h>
+
+#ifdef __APPLE__
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+static inline int iov_len(size_t n)
+{
+	return static_cast<int>(n);
+}
+#else
+static inline size_t iov_len(size_t n)
+{
+	return n;
+}
+#endif
 #include <cassert>
 #include <memory>
 #include <netdb.h>
@@ -29,6 +44,7 @@
 #include <netinet/tcp.h>
 #include <string.h>
 #include <string>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -72,11 +88,23 @@ wivrn::UDP::UDP()
 	if (fd < 0)
 		throw std::system_error{errno, std::generic_category()};
 	fcntl(fd, F_SETFD, FD_CLOEXEC);
+#ifdef __APPLE__
+	constexpr int on = 1;
+	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+	constexpr int v6only = 0;
+	setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &v6only, sizeof(v6only));
+	constexpr int reuse = 1;
+	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+#endif
 }
 
 wivrn::UDP::UDP(int fd)
 {
 	this->fd = fd;
+#ifdef __APPLE__
+	constexpr int on = 1;
+	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#endif
 }
 
 void wivrn::UDP::bind(sockaddr_in6 address)
@@ -114,7 +142,7 @@ void wivrn::UDP::subscribe_multicast(in6_addr address)
 	ipv6_mreq subscribe{};
 	subscribe.ipv6mr_multiaddr = address;
 
-	if (setsockopt(fd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &subscribe, sizeof(subscribe)) < 0)
+	if (setsockopt(fd, IPPROTO_IPV6, IPV6_JOIN_GROUP, &subscribe, sizeof(subscribe)) < 0)
 	{
 		::close(fd);
 		throw std::system_error{errno, std::generic_category()};
@@ -128,7 +156,7 @@ void wivrn::UDP::unsubscribe_multicast(in6_addr address)
 	ipv6_mreq subscribe{};
 	subscribe.ipv6mr_multiaddr = address;
 
-	if (setsockopt(fd, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &subscribe, sizeof(subscribe)) < 0)
+	if (setsockopt(fd, IPPROTO_IPV6, IPV6_LEAVE_GROUP, &subscribe, sizeof(subscribe)) < 0)
 	{
 		::close(fd);
 		throw std::system_error{errno, std::generic_category()};
@@ -162,6 +190,11 @@ void wivrn::TCP::init()
 		::close(fd);
 		throw std::system_error{errno, std::generic_category()};
 	}
+
+#ifdef __APPLE__
+	constexpr int nosigpipe = 1;
+	setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, sizeof(nosigpipe));
+#endif
 
 	mutex = std::make_unique<std::mutex>();
 }
@@ -255,7 +288,13 @@ std::pair<wivrn::deserialization_packet, sockaddr_in6> wivrn::UDP::receive_from_
 	sockaddr_in6 addr;
 	socklen_t addrlen = sizeof(addr);
 
+#ifdef __APPLE__
+	int pkt_size = 0;
+	ioctl(fd, FIONREAD, &pkt_size);
+	size_t size = pkt_size;
+#else
 	size_t size = recvfrom(fd, nullptr, 0, MSG_PEEK | MSG_TRUNC, (sockaddr *)&addr, &addrlen);
+#endif
 
 #if defined(__cpp_lib_smart_ptr_for_overwrite) && __cpp_lib_smart_ptr_for_overwrite >= 202002L
 	auto buffer = std::make_shared_for_overwrite<uint8_t[]>(size);
@@ -317,14 +356,42 @@ wivrn::deserialization_packet wivrn::UDP::receive_raw()
 #endif
 	}
 	std::array<iovec, num_messages> iovecs;
-	std::array<mmsghdr, num_messages> mmsgs;
 	for (size_t i = 0; i < num_messages; ++i)
 	{
 		iovecs[i] = {
 		        .iov_base = buffer.get() + message_size * i,
 		        .iov_len = message_size,
 		};
+	}
 
+#ifdef __APPLE__
+	std::array<size_t, num_messages> msg_lens{};
+	int received = 0;
+	for (size_t i = 0; i < num_messages; ++i)
+	{
+		msghdr hdr{};
+		hdr.msg_iov = &iovecs[i];
+		hdr.msg_iovlen = 1;
+		ssize_t n = ::recvmsg(fd, &hdr, (i == 0) ? 0 : MSG_DONTWAIT);
+		if (n < 0)
+		{
+			if (received > 0 && errno == EAGAIN)
+				break;
+			throw std::system_error{errno, std::generic_category()};
+		}
+		if (n == 0)
+		{
+			if (received > 0)
+				break;
+			throw socket_shutdown();
+		}
+		msg_lens[i] = n;
+		received++;
+	}
+#else
+	std::array<::mmsghdr, num_messages> mmsgs;
+	for (size_t i = 0; i < num_messages; ++i)
+	{
 		mmsgs[i] = {
 		        .msg_hdr = {
 		                .msg_iov = &iovecs[i],
@@ -340,11 +407,16 @@ wivrn::deserialization_packet wivrn::UDP::receive_raw()
 	if (received == 0)
 		throw socket_shutdown();
 
+	std::array<size_t, num_messages> msg_lens{};
+	for (int i = 0; i < received; ++i)
+		msg_lens[i] = mmsgs[i].msg_len;
+#endif
+
 	messages.reserve(received);
 
 	for (int i = received - 1; i >= 0; --i)
 	{
-		std::span<uint8_t> message{(uint8_t *)iovecs[i].iov_base, mmsgs[i].msg_len};
+		std::span<uint8_t> message{(uint8_t *)iovecs[i].iov_base, msg_lens[i]};
 		assert(message.data() != nullptr);
 
 		if (encrypted)
@@ -404,12 +476,18 @@ size_t wivrn::UDP::send_raw(serialization_packet && packet)
 
 size_t wivrn::UDP::send_many_raw(std::span<serialization_packet> packets)
 {
+	if (packets.empty())
+		return 0;
+
+#ifdef __APPLE__
+	size_t sent = 0;
+	for (serialization_packet & packet: packets)
+		sent += send_raw(std::move(packet));
+	return sent;
+#else
 	thread_local std::vector<iovec> iovecs;
 	thread_local std::vector<mmsghdr> mmsgs;
 	thread_local std::vector<uint64_t> iv_counters;
-
-	if (packets.empty())
-		return 0;
 
 	iovecs.clear();
 	mmsgs.clear();
@@ -458,6 +536,7 @@ size_t wivrn::UDP::send_many_raw(std::span<serialization_packet> packets)
 	if (sendmmsg(fd, mmsgs.data(), mmsgs.size(), 0) < 0)
 		throw std::system_error{errno, std::generic_category()};
 	return sent;
+#endif
 }
 
 wivrn::deserialization_packet wivrn::TCP::receive_raw()
@@ -561,7 +640,7 @@ size_t wivrn::TCP::send_raw(serialization_packet && packet)
 	        .msg_name = nullptr,
 	        .msg_namelen = 0,
 	        .msg_iov = iovecs.data(),
-	        .msg_iovlen = iovecs.size(),
+	        .msg_iovlen = iov_len(iovecs.size()),
 	        .msg_control = nullptr,
 	        .msg_controllen = 0,
 	        .msg_flags = 0,
@@ -635,7 +714,7 @@ size_t wivrn::TCP::send_many_raw(std::span<serialization_packet> packets)
 	        .msg_name = nullptr,
 	        .msg_namelen = 0,
 	        .msg_iov = iovecs.data(),
-	        .msg_iovlen = iovecs.size(),
+	        .msg_iovlen = iov_len(iovecs.size()),
 	        .msg_control = nullptr,
 	        .msg_controllen = 0,
 	        .msg_flags = 0,

@@ -1,4 +1,6 @@
 if (NOT TARGET OpenSSL::Crypto)
+    string(TOLOWER ${CMAKE_HOST_SYSTEM_NAME} _OPENSSL_HOST_OS)
+    set(_OPENSSL_HOST_TAG "${_OPENSSL_HOST_OS}-x86_64")
     # The NDK does not include OpenSSL, download it
     set(OPENSSL_VERSION "3.6.0")
     set(OPENSSL_SHA256 b6a5f44b7eb69e3fa35dbf15524405b44837a481d43d81daddde3ff21fcbb8e9)
@@ -18,7 +20,7 @@ if (NOT TARGET OpenSSL::Crypto)
     endif()
 
     execute_process(
-        COMMAND ${CMAKE_COMMAND} -E env ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK} PATH=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin:$ENV{PATH} ./Configure
+        COMMAND ${CMAKE_COMMAND} -E env ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK} PATH=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/${_OPENSSL_HOST_TAG}/bin:$ENV{PATH} ./Configure
             android-arm64
             --prefix=${FETCHCONTENT_BASE_DIR}/openssl
             --openssldir=${FETCHCONTENT_BASE_DIR}/openssl
@@ -29,13 +31,13 @@ if (NOT TARGET OpenSSL::Crypto)
 
     if (NOT EXISTS ${FETCHCONTENT_BASE_DIR}/openssl/lib/libcrypto.so)
         execute_process(
-            COMMAND ${CMAKE_COMMAND} -E env ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK} PATH=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin:$ENV{PATH} make -j${CMAKE_BUILD_PARALLEL_LEVEL}
+            COMMAND ${CMAKE_COMMAND} -E env ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK} PATH=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/${_OPENSSL_HOST_TAG}/bin:$ENV{PATH} make -j${CMAKE_BUILD_PARALLEL_LEVEL}
             WORKING_DIRECTORY ${FETCHCONTENT_BASE_DIR}/openssl-src
             OUTPUT_FILE ${CMAKE_BINARY_DIR}/openssl-make-out
             ERROR_FILE ${CMAKE_BINARY_DIR}/openssl-make-err
         )
         execute_process(
-            COMMAND ${CMAKE_COMMAND} -E env ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK} PATH=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/linux-x86_64/bin:$ENV{PATH} make install_sw
+            COMMAND ${CMAKE_COMMAND} -E env ANDROID_NDK_ROOT=${CMAKE_ANDROID_NDK} PATH=${CMAKE_ANDROID_NDK}/toolchains/llvm/prebuilt/${_OPENSSL_HOST_TAG}/bin:$ENV{PATH} make install_sw
             WORKING_DIRECTORY ${FETCHCONTENT_BASE_DIR}/openssl-src
             OUTPUT_FILE ${CMAKE_BINARY_DIR}/openssl-install-out
             ERROR_FILE ${CMAKE_BINARY_DIR}/openssl-install-err

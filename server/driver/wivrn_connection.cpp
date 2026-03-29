@@ -56,6 +56,34 @@ static std::string clean_key(std::string key)
 wivrn::incorrect_pin::incorrect_pin() :
         std::runtime_error("Incorrect PIN") {}
 
+#ifdef __APPLE__
+#include "compositor_bootstrap.h"
+
+std::unique_ptr<wivrn::wivrn_connection> wivrn::wivrn_connection::from_bootstrap(
+        TCP && tcp, UDP && udp,
+        const compositor_bootstrap_message & b_in)
+{
+	auto b = b_in;
+	auto conn = std::unique_ptr<wivrn_connection>(new wivrn_connection());
+	conn->control = std::move(tcp);
+	if (b.has_stream)
+		conn->stream = std::move(udp);
+	else
+		conn->stream = decltype(conn->stream)(-1);
+	conn->info_packet = b.headset_info;
+	conn->active = true;
+	conn->state = static_cast<encryption_state>(b.encryption_state);
+	conn->pin = b.pin;
+	if (b.encrypted)
+	{
+		conn->control.set_aes_key_and_ivs(b.control_key, b.control_iv_from_headset, b.control_iv_to_headset);
+		if (b.has_stream)
+			conn->stream.set_aes_key_and_ivs(b.stream_key, b.stream_iv_header_from_headset, b.stream_iv_header_to_headset);
+	}
+	return conn;
+}
+#endif
+
 wivrn::wivrn_connection::wivrn_connection(std::stop_token stop_token, encryption_state state, std::string pin, TCP && tcp) :
         control(std::move(tcp)),
         stream(-1),
@@ -91,7 +119,15 @@ void wivrn::wivrn_connection::init(std::stop_token stop_token, std::function<voi
 	else
 	{
 		stream = decltype(stream)();
+#ifdef __APPLE__
+		sockaddr_in6 udp_bind_addr = {};
+		udp_bind_addr.sin6_family = AF_INET6;
+		udp_bind_addr.sin6_addr = in6addr_any;
+		udp_bind_addr.sin6_port = server_address.sin6_port;
+		stream.bind(udp_bind_addr);
+#else
 		stream.bind(server_address);
+#endif
 	}
 
 	auto receive = [&](std::optional<std::chrono::seconds> timeout = std::nullopt, bool allow_stream_socket = false) {
@@ -241,6 +277,9 @@ void wivrn::wivrn_connection::init(std::stop_token stop_token, std::function<voi
 			secrets s{server_key, headset_key, is_public_key_known ? "000000" : pin};
 			control.set_aes_key_and_ivs(s.control_key, s.control_iv_from_headset, s.control_iv_to_headset);
 			stream.set_aes_key_and_ivs(s.stream_key, s.stream_iv_header_from_headset, s.stream_iv_header_to_headset);
+#ifdef __APPLE__
+			handshake_secrets = s;
+#endif
 			break;
 	}
 

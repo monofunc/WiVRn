@@ -72,6 +72,11 @@ std::vector<const char *> wivrn_comp_target::wanted_device_extensions = {
 #ifdef VK_KHR_video_encode_h265
         VK_KHR_VIDEO_ENCODE_H265_EXTENSION_NAME,
 #endif
+
+// Required for VideoToolbox IOSurface zero-copy on macOS
+#ifdef VK_EXT_metal_objects
+        VK_EXT_METAL_OBJECTS_EXTENSION_NAME,
+#endif
 };
 
 #ifdef XRT_FEATURE_RENDERDOC
@@ -148,12 +153,16 @@ VkResult wivrn_comp_target::create_images_impl(vk::ImageUsageFlags flags)
 
 	auto format = vk::Format(this->format);
 
+#ifdef __APPLE__
+	bool is_10bit = false;
+	std::array formats = {format, format, format};
+#else
 	bool is_10bit = format == vk::Format::eG10X6B10X6R10X62Plane420Unorm3Pack16;
-
 	std::array formats = {
 	        is_10bit ? vk::Format::eR16Unorm : vk::Format::eR8Unorm,
 	        is_10bit ? vk::Format::eR16G16Unorm : vk::Format::eR8G8Unorm,
 	        format};
+#endif
 
 	images = U_TYPED_ARRAY_CALLOC(comp_target_image, image_count);
 
@@ -210,6 +219,22 @@ VkResult wivrn_comp_target::create_images_impl(vk::ImageUsageFlags flags)
 		vk::ImageViewUsageCreateInfo usage{
 		        .usage = flags,
 		};
+#ifdef __APPLE__
+		item.image_view_y = vk::raii::ImageView(device,
+		                                        {
+		                                                .pNext = &usage,
+		                                                .image = item.image,
+		                                                .viewType = vk::ImageViewType::e2DArray,
+		                                                .format = formats[0],
+		                                                .subresourceRange = {
+		                                                        .aspectMask = vk::ImageAspectFlagBits::eColor,
+		                                                        .levelCount = 1,
+		                                                        .layerCount = vk::RemainingArrayLayers,
+		                                                },
+		                                        });
+		images[i].view = VkImageView(*item.image_view_y);
+		wivrn_bundle->name(item.image_view_y, "comp target image view");
+#else
 		item.image_view_y = vk::raii::ImageView(device,
 		                                        {
 		                                                .pNext = &usage,
@@ -238,6 +263,7 @@ VkResult wivrn_comp_target::create_images_impl(vk::ImageUsageFlags flags)
 		images[i].view_cbcr = VkImageView(*item.image_view_cbcr);
 		wivrn_bundle->name(item.image_view_y, "comp target image view (y)");
 		wivrn_bundle->name(item.image_view_cbcr, "comp target image view (CbCr)");
+#endif
 	}
 
 	psc.fence = vk::raii::Fence(device, vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
@@ -284,20 +310,24 @@ void wivrn_comp_target::create_encoders()
 
 	std::map<int, std::vector<std::shared_ptr<video_encoder>>> thread_params;
 
-	for (auto [i, settings]: std::ranges::enumerate_view(settings))
+	for (uint8_t i = 0; i < settings.size(); ++i)
 	{
 		auto & encoder = encoders.emplace_back(
-		        video_encoder::create(*wivrn_bundle, settings, i));
-		desc.codec[i] = settings.codec;
+		        video_encoder::create(*wivrn_bundle, settings[i], i));
+		desc.codec[i] = settings[i].codec;
 
-		thread_params[settings.group].emplace_back(encoder);
+		thread_params[settings[i].group].emplace_back(encoder);
 	}
 
 	for (auto & [group, params]: thread_params)
 	{
-		auto & thread = encoder_threads.emplace_back([this](auto stop_token, auto... args) { return run_present(stop_token, args...); }, encoder_threads.size(), std::move(params));
+		auto & thread = encoder_threads.emplace_back([this](std::stop_token stop_token, int index, std::vector<std::shared_ptr<video_encoder>> encoders) { return run_present(stop_token, index, std::move(encoders)); }, encoder_threads.size(), std::move(params));
 		std::string name = "encoder " + std::to_string(group);
+#ifdef __APPLE__
+		(void)name;
+#else
 		pthread_setname_np(thread.native_handle(), name.c_str());
+#endif
 	}
 	cnx.send_control(to_headset::video_stream_description{desc});
 }
@@ -372,11 +402,15 @@ void wivrn_comp_target::create_images(const comp_target_create_images_info * cre
 
 	init_semaphores();
 
-	// will fail on encoder init if bit_depth is arbitrary garbage
+#ifdef __APPLE__
+	format = VK_FORMAT_B8G8R8A8_UNORM;
+	c->nr.target_format = (VkFormat)format;
+#else
 	if (settings[0].bit_depth == 10)
 		format = VK_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16;
 	else
 		format = VK_FORMAT_G8_B8R8_2PLANE_420_UNORM;
+#endif
 
 	width = create_info->extent.width;
 	height = create_info->extent.height;

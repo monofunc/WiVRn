@@ -130,6 +130,33 @@
 			"cacheVariables": {
 				"WIVRN_USE_SYSTEM_BOOST": "OFF"
 			}
+		},
+		{
+			"name": "server-macos",
+			"displayName": "macOS Server",
+			"inherits": "base",
+			"binaryDir": "${sourceDir}/build-server-macos",
+			"cacheVariables": {
+				"WIVRN_BUILD_SERVER": "ON",
+				"WIVRN_BUILD_DASHBOARD": "OFF",
+				"WIVRN_BUILD_WIVRNCTL": "OFF",
+				"WIVRN_USE_VAAPI": "OFF",
+				"WIVRN_USE_VULKAN_ENCODE": "OFF",
+				"WIVRN_USE_X264": "OFF",
+				"WIVRN_USE_NVENC": "OFF",
+				"WIVRN_USE_SYSTEMD": "OFF",
+				"WIVRN_USE_PULSEAUDIO": "OFF",
+				"WIVRN_USE_PIPEWIRE": "OFF"
+			}
+		},
+		{
+			"name": "client-macos-x86_64",
+			"displayName": "macOS x86_64 OpenXR client (for Wine/CrossOver)",
+			"inherits": "server-macos",
+			"binaryDir": "${sourceDir}/build-client-x86_64",
+			"cacheVariables": {
+				"CMAKE_OSX_ARCHITECTURES": "x86_64"
+			}
 		}
 	],
 	"buildPresets": [

@@ -1,6 +1,6 @@
 /*
  * WiVRn VR streaming
- * Copyright (C) 2024  Guillaume Meunier <guillaume.meunier@centraliens.net>
+ * Copyright (C) 2026 Mono <81423605+monofunc@users.noreply.github.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,19 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#include "hostname.h"
 
-#include <cstdint>
+#include <unistd.h>
 
-class sleep_inhibitor
+std::string wivrn::hostname()
 {
-#ifdef __APPLE__
-	uint32_t assertion_id = 0; // IOPMAssertionID
-#else
-	int fd = -1;
-#endif
-
-public:
-	sleep_inhibitor();
-	~sleep_inhibitor();
-};
+	static std::string result = []() -> std::string {
+		char buf[_POSIX_HOST_NAME_MAX];
+		if (gethostname(buf, sizeof(buf)) == 0)
+			return buf;
+		return "macOS";
+	}();
+	return result;
+}

@@ -1,6 +1,6 @@
 /*
  * WiVRn VR streaming
- * Copyright (C) 2024  Guillaume Meunier <guillaume.meunier@centraliens.net>
+ * Copyright (C) 2026 Mono <81423605+monofunc@users.noreply.github.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,19 +16,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#pragma once
+#include "sleep_inhibitor.h"
 
-#include <cstdint>
+#include <IOKit/pwr_mgt/IOPMLib.h>
+#include <iostream>
 
-class sleep_inhibitor
+sleep_inhibitor::sleep_inhibitor()
 {
-#ifdef __APPLE__
-	uint32_t assertion_id = 0; // IOPMAssertionID
-#else
-	int fd = -1;
-#endif
+	IOReturn ret = IOPMAssertionCreateWithName(
+	        kIOPMAssertionTypePreventUserIdleSystemSleep,
+	        kIOPMAssertionLevelOn,
+	        CFSTR("WiVRn VR streaming active"),
+	        &assertion_id);
 
-public:
-	sleep_inhibitor();
-	~sleep_inhibitor();
-};
+	if (ret != kIOReturnSuccess)
+		std::cerr << "Cannot create sleep inhibitor assertion" << std::endl;
+}
+
+sleep_inhibitor::~sleep_inhibitor()
+{
+	if (assertion_id != kIOPMNullAssertionID)
+		IOPMAssertionRelease(assertion_id);
+}

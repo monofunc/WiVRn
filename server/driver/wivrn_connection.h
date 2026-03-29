@@ -19,6 +19,7 @@
 
 #pragma once
 
+#include "secrets.h"
 #include "wivrn_ipc.h"
 #include "wivrn_packets.h"
 #include "wivrn_sockets.h"
@@ -56,8 +57,14 @@ private:
 	encryption_state state;
 
 	from_headset::headset_info_packet info_packet;
+#ifdef __APPLE__
+	std::optional<secrets> handshake_secrets;
+#endif
 
 	void init(std::stop_token stop_token, std::function<void()> tick = []() {});
+#ifdef __APPLE__
+	wivrn_connection() : stream(-1), state(encryption_state::disabled) {}
+#endif
 
 public:
 	wivrn_connection(std::stop_token stop_token, encryption_state state, std::string pin, TCP && tcp);
@@ -117,6 +124,18 @@ public:
 	{
 		return info_packet;
 	}
+
+#ifdef __APPLE__
+	int get_tcp_fd() const { return control.get_fd(); }
+	int get_udp_fd() const { return stream.get_fd(); }
+	int release_tcp_fd() { return control.release(); }
+	int release_udp_fd() { return stream.release(); }
+	const std::optional<secrets> & get_secrets() const { return handshake_secrets; }
+
+	static std::unique_ptr<wivrn_connection> from_bootstrap(
+	        TCP && tcp, UDP && udp,
+	        const struct compositor_bootstrap_message & bootstrap);
+#endif
 
 	template <typename T>
 	int poll(T && visitor, int timeout)
