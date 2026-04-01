@@ -1,0 +1,55 @@
+From 2a1288669b260950fd34f153e41452bf49b30c14 Mon Sep 17 00:00:00 2001
+From: Mono <81423605+monofunc@users.noreply.github.com>
+Date: Thu, 2 Apr 2026 00:44:28 +0400
+Subject: [PATCH] ipc/server: Add client_described callback
+
+The existing client_connected callback fires before the client sends its description, so the PID is still zero at that point. WiVRn needs the client's PID to set up per-process audio capture on macOS.
+
+* New optional callback in ipc_server_callbacks, fired at the end of ipc_handle_instance_describe_client
+* NULL-guarded at the call site, not populated in the default callback table
+---
+ src/xrt/ipc/server/ipc_server_handler.c   | 7 +++++++
+ src/xrt/ipc/server/ipc_server_interface.h | 9 +++++++++
+ 2 files changed, 16 insertions(+)
+
+diff --git a/src/xrt/ipc/server/ipc_server_handler.c b/src/xrt/ipc/server/ipc_server_handler.c
+index c5cecd64a..a674e26e0 100644
+--- a/src/xrt/ipc/server/ipc_server_handler.c
++++ b/src/xrt/ipc/server/ipc_server_handler.c
+@@ -464,6 +464,13 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
+ 	// Log the pretty message.
+ 	IPC_INFO(ics->server, "%s", sink.buffer);
+ 
++	if (ics->server->callbacks->client_described != NULL) {
++		ics->server->callbacks->client_described(
++		        ics->server,
++		        ics->client_state.id,
++		        ics->server->callback_data);
++	}
++
+ 	return XRT_SUCCESS;
+ }
+ 
+diff --git a/src/xrt/ipc/server/ipc_server_interface.h b/src/xrt/ipc/server/ipc_server_interface.h
+index 19ccec04c..ab27f8ba3 100644
+--- a/src/xrt/ipc/server/ipc_server_interface.h
++++ b/src/xrt/ipc/server/ipc_server_interface.h
+@@ -86,6 +86,15 @@ struct ipc_server_callbacks
+ 	 */
+ 	void (*client_connected)(struct ipc_server *s, uint32_t client_id, void *data);
+ 
++	/*!
++	 * A client has described itself. PID and application info are now available.
++	 *
++	 * param s     The IPC server.
++	 * param client_id The ID of the client.
++	 * param data  User data given passed into the main function.
++	 */
++	void (*client_described)(struct ipc_server *s, uint32_t client_id, void *data);
++
+ 	/*!
+ 	 * A client has disconnected from the IPC server.
+ 	 *
+-- 
+2.50.1 (Apple Git-155)
+

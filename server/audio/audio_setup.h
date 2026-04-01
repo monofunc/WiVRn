@@ -21,6 +21,7 @@
 
 #include <memory>
 #include <string>
+#include <sys/types.h>
 
 #include "wivrn_packets.h"
 
@@ -38,6 +39,9 @@ struct audio_device
 
 	virtual void pause() = 0;
 	virtual void resume() = 0;
+
+	virtual void on_app_connected(pid_t) {}
+	virtual void on_app_disconnected(pid_t) {}
 
 	static std::unique_ptr<audio_device> create(
 	        const std::string & source_name,

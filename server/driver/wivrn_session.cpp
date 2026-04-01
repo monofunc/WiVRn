@@ -378,6 +378,18 @@ void wivrn_session::start(ipc_server * server)
 	resume_session();
 }
 
+void wivrn_session::notify_app_connected(pid_t pid)
+{
+	if (audio_handle)
+		audio_handle->on_app_connected(pid);
+}
+
+void wivrn_session::notify_app_disconnected(pid_t pid)
+{
+	if (audio_handle)
+		audio_handle->on_app_disconnected(pid);
+}
+
 void wivrn_session::stop()
 {
 	net_thread = std::jthread();

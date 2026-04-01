@@ -150,6 +150,16 @@ if (APPLE AND WIVRN_BUILD_SERVER)
 		)
 	endif()
 
+	if(WIVRN_USE_COREAUDIO)
+		target_sources(wivrn-compositor PRIVATE
+			audio/audio_coreaudio.mm
+		)
+		target_link_libraries(wivrn-compositor PRIVATE
+			"-framework CoreAudio"
+			"-framework AudioToolbox"
+		)
+	endif()
+
 	add_executable(wivrn-server
 		accept_connection.cpp
 		active_runtime.cpp

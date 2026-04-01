@@ -1,6 +1,6 @@
 /*
  * WiVRn VR streaming
- * Copyright (C) 2025  Patrick Nicolas <patricknicolas@laposte.net>
+ * Copyright (C) 2026 Mono <81423605+monofunc@users.noreply.github.com>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -18,21 +18,16 @@
 
 #pragma once
 
-#include "server/ipc_server_interface.h"
+#include "audio_setup.h"
 
 namespace wivrn
 {
-class ipc_server_cb : public ipc_server_callbacks
-{
-	void init_failed(xrt_result);
-	void mainloop_entering(ipc_server *, xrt_instance *);
-	void mainloop_leaving(ipc_server *, xrt_instance *);
-	void client_connected(ipc_server *, uint32_t);
-	void client_described(ipc_server *, uint32_t);
-	void client_disconnected(ipc_server *, uint32_t);
 
-public:
-	using base = void;
-	ipc_server_cb();
-};
-} // namespace wivrn
+std::unique_ptr<audio_device> create_coreaudio_handle(
+        const std::string & source_name,
+        const std::string & source_description,
+        const std::string & sink_name,
+        const std::string & sink_description,
+        const wivrn::from_headset::headset_info_packet & info,
+        wivrn::wivrn_session & session);
+}

@@ -39,6 +39,7 @@ class instance : public xrt_instance
 	ipc_server * server = nullptr;
 
 public:
+	wivrn_session * get_session() const { return session; }
 	using base = xrt_instance;
 	instance();
 	void set_ipc_server(ipc_server *);

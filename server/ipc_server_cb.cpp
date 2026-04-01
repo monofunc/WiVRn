@@ -43,9 +43,29 @@ void ipc_server_cb::client_connected(ipc_server * server, uint32_t client_id)
 {
 	IPC_INFO(server, "Client %u connected", client_id);
 }
+
+void ipc_server_cb::client_described(ipc_server * server, uint32_t client_id)
+{
+	auto inst = static_cast<wivrn::instance *>(server->xinst);
+	if (auto * session = inst->get_session())
+	{
+		ipc_app_state state{};
+		if (ipc_server_get_client_app_state(server, client_id, &state) == XRT_SUCCESS && state.pid != 0)
+			session->notify_app_connected(state.pid);
+	}
+}
+
 void ipc_server_cb::client_disconnected(ipc_server * server, uint32_t client_id)
 {
 	IPC_INFO(server, "Client %u disconnected", client_id);
+
+	auto inst = static_cast<wivrn::instance *>(server->xinst);
+	if (auto * session = inst->get_session())
+	{
+		ipc_app_state state{};
+		if (ipc_server_get_client_app_state(server, client_id, &state) == XRT_SUCCESS)
+			session->notify_app_disconnected(state.pid);
+	}
 }
 
 ipc_server_cb::ipc_server_cb() :
@@ -54,6 +74,7 @@ ipc_server_cb::ipc_server_cb() :
                 .mainloop_entering = method_pointer2<&ipc_server_cb::mainloop_entering>,
                 .mainloop_leaving = method_pointer2<&ipc_server_cb::mainloop_leaving>,
                 .client_connected = method_pointer2<&ipc_server_cb::client_connected>,
+                .client_described = method_pointer2<&ipc_server_cb::client_described>,
                 .client_disconnected = method_pointer2<&ipc_server_cb::client_disconnected>,
         }
 {}

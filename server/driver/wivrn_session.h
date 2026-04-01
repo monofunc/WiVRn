@@ -135,6 +135,9 @@ public:
 	void start(ipc_server *);
 	void stop();
 
+	void notify_app_connected(pid_t pid);
+	void notify_app_disconnected(pid_t pid);
+
 	bool request_stop();
 	void quit_if_no_client();
 
