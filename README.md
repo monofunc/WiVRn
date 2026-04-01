@@ -3,7 +3,7 @@
 
 Known issues:
 
-* No audio forwarding to headset
+* No microphone support
 * Headset must connect before launching any app
 * No GUI
 * No encryption
