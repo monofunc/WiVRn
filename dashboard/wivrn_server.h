@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <QDBusPendingCallWatcher>
-#include <QDBusServiceWatcher>
 #include <QDateTime>
 #include <QObject>
 #include <QProcess>
@@ -28,10 +26,17 @@
 #include <QtQml/qqmlregistration.h>
 #include <memory>
 
+#ifndef Q_OS_MACOS
+#include <QDBusPendingCallWatcher>
+#include <QDBusServiceWatcher>
+#endif
+
 #include "wivrn_qdbus_types.h"
 
+#ifndef Q_OS_MACOS
 class IoGithubWivrnServerInterface;
 class OrgFreedesktopDBusPropertiesInterface;
+#endif
 
 class headset
 {
@@ -145,10 +150,12 @@ class wivrn_server : public QObject
 	QML_NAMED_ELEMENT(WivrnServer)
 	QML_SINGLETON
 
+#ifndef Q_OS_MACOS
 	std::unique_ptr<IoGithubWivrnServerInterface> server_interface{};
 	std::unique_ptr<OrgFreedesktopDBusPropertiesInterface> server_properties_interface{};
 	QDBusServiceWatcher dbus_watcher;
 	std::unique_ptr<QDBusPendingCallWatcher> get_all_properties_call_watcher;
+#endif
 
 	QProcess * server_process = nullptr;
 
@@ -347,16 +354,17 @@ public:
 	Q_INVOKABLE void copy_steam_command();
 
 private:
+#ifndef Q_OS_MACOS
 	void on_server_dbus_registered();
 	void on_server_dbus_unregistered();
 	void on_server_properties_changed(const QString & interface_name, const QVariantMap & changed_properties, const QStringList & invalidated_properties);
+	void refresh_server_properties();
+#endif
 
 	void on_server_ready_read_standard_output();
 
 	std::unique_ptr<QFile> server_log_file;
 	QStringList server_output;
-
-	void refresh_server_properties();
 
 	Status m_serverStatus{Status::Stopped};
 	bool m_headsetConnected{};
