@@ -562,6 +562,8 @@ QString wivrn_server::hostname()
 QString wivrn_server::host_path(QString path)
 {
 #ifndef Q_OS_MACOS
+	// On Linux, resolve Flatpak document portal paths to host paths.
+	// Flatpak is not available on macOS, so always return the path unchanged.
 	if (not wivrn::is_flatpak())
 		return path;
 

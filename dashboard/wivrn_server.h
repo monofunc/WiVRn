@@ -34,6 +34,8 @@
 #include "wivrn_qdbus_types.h"
 
 #ifndef Q_OS_MACOS
+// Forward declarations for the D-Bus interface classes used by the guarded
+// member variables below (server_interface, server_properties_interface, etc.)
 class IoGithubWivrnServerInterface;
 class OrgFreedesktopDBusPropertiesInterface;
 #endif
