@@ -178,6 +178,20 @@ endif()
 
 if (WIVRN_BUILD_DASHBOARD OR WIVRN_BUILD_SERVER)
     pkg_check_modules(librsvg-2.0 REQUIRED IMPORTED_TARGET librsvg-2.0)
+    if(APPLE)
+        # pkg-config on macOS may report SDK include paths that do not exist
+        # (e.g. MacOSX26.sdk/usr/include/ffi). Filter them out to avoid a
+        # CMake error about non-existent INTERFACE_INCLUDE_DIRECTORIES.
+        get_target_property(_rsvg_incdirs PkgConfig::librsvg-2.0 INTERFACE_INCLUDE_DIRECTORIES)
+        if(_rsvg_incdirs)
+            foreach(_dir IN LISTS _rsvg_incdirs)
+                if(NOT EXISTS "${_dir}")
+                    list(REMOVE_ITEM _rsvg_incdirs "${_dir}")
+                endif()
+            endforeach()
+            set_target_properties(PkgConfig::librsvg-2.0 PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_rsvg_incdirs}")
+        endif()
+    endif()
     find_package(LibArchive REQUIRED)
     find_package(PNG REQUIRED)
 endif()

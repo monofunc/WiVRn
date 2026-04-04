@@ -59,7 +59,7 @@ Additionally, if your environment requires absolute paths inside the OpenXR runt
 Install the required packages with Homebrew:
 
 ```bash
-brew install cmake ninja pkg-config eigen nlohmann-json cli11 boost openssl
+brew install cmake ninja pkg-config eigen nlohmann-json cli11 boost openssl librsvg
 ```
 
 After installing the Vulkan SDK, source its environment setup script (the exact path depends on the SDK version):
