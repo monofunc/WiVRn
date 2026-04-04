@@ -176,10 +176,20 @@ void wivrn::UDP::set_send_buffer_size(int size)
 void wivrn::UDP::set_tos(int tos)
 {
 	int err = setsockopt(fd, IPPROTO_IP, IP_TOS, &tos, sizeof(tos));
+#ifdef __APPLE__
+	// Socket may be AF_INET6 on macOS, fall back to IPV6_TCLASS
+	if (err == -1 && errno == EINVAL)
+		err = setsockopt(fd, IPPROTO_IPV6, IPV6_TCLASS, &tos, sizeof(tos));
+#endif
 	if (err == -1)
 	{
 		throw std::system_error{errno, std::generic_category()};
 	}
+#ifdef __APPLE__
+	// SO_NET_SERVICE_TYPE gives better scheduling than DSCP alone
+	int service_type = NET_SERVICE_TYPE_VI;
+	setsockopt(fd, SOL_SOCKET, SO_NET_SERVICE_TYPE, &service_type, sizeof(service_type));
+#endif
 }
 
 void wivrn::TCP::init()
