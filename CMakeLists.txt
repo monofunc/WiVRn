@@ -71,6 +71,7 @@ if(APPLE)
     set(WIVRN_BUILD_SERVER_LIBRARY OFF CACHE BOOL "" FORCE)
     set(WIVRN_FEATURE_STEAMVR_LIGHTHOUSE OFF CACHE BOOL "" FORCE)
     set(WIVRN_FEATURE_SOLARXR OFF CACHE BOOL "" FORCE)
+    set(XRT_HAVE_OPENGLES OFF CACHE BOOL "" FORCE)
 endif()
 
 set(OVR_COMPAT_SEARCH_PATH "/opt/xrizer:/usr/local/lib/OpenComposite:/usr/lib/OpenComposite:/opt/OpenComposite:/opt/opencomposite"
