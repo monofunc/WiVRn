@@ -83,7 +83,7 @@ CMake automatically detects macOS and configures the build accordingly:
 - Uses VideoToolbox for hardware encoding
 - Uses CoreAudio for audio
 - Uses Bonjour (built into macOS) for headset discovery
-- Disables Linux-only features (systemd, avahi, dashboard, etc.)
+- Disables Linux-only features (systemd, avahi, etc.)
 
 The build produces two executables in `build-server/server/`:
 - `wivrn-server` — the main server process (manages connections and launches the compositor)
@@ -103,7 +103,9 @@ Make sure the headset connects **before** launching any VR application.
 
 The WiVRn dashboard requires Qt6, and the WiVRn server.
 
-## Compile
+## Dashboard (Linux)
+
+### Compile
 
 From your checkout directory, compile both the server and the dashboard:
 ```bash
@@ -112,6 +114,29 @@ cmake --build build-dashboard
 ```
 
 See [Server (PC, Linux)](#server-pc-linux) for the server compile options.
+
+## Dashboard (macOS)
+
+The dashboard can be built on macOS alongside the server. The D-Bus interface used on Linux is automatically disabled; all other features are available.
+
+### Build dependencies
+
+In addition to the [macOS server prerequisites](#prerequisites), install the following packages with Homebrew:
+
+```bash
+brew install qt extra-cmake-modules qcoro kirigami ki18n kcoreaddons qqc2-desktop-style kiconthemes kirigami-addons
+```
+
+### Compile
+
+From your checkout directory, compile both the server and the dashboard:
+
+```bash
+cmake -B build-dashboard . -GNinja -DWIVRN_BUILD_CLIENT=OFF -DWIVRN_BUILD_SERVER=ON -DWIVRN_BUILD_DASHBOARD=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build-dashboard
+```
+
+The dashboard executable `wivrn-dashboard` will be placed in `build-dashboard/dashboard/`.
 
 # Client (headset)
 
