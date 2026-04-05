@@ -29,9 +29,14 @@
 #include <QDesktopServices>
 #include <QtLogging>
 #include <cassert>
+#include <climits>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <unistd.h>
+
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 255
+#endif
 
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
@@ -105,7 +110,8 @@ std::unique_ptr<QFile> get_server_log_file()
 	}
 
 	std::unique_ptr<QFile> log_file = std::make_unique<QFile>(state_path + "/server_logs_" + QDateTime::currentDateTime().toString(Qt::ISODate) + ".txt");
-	log_file->open(QFile::WriteOnly | QFile::Truncate);
+	if (!log_file->open(QFile::WriteOnly | QFile::Truncate))
+		qWarning() << "Failed to open log file" << log_file->fileName();
 
 	qDebug() << "Saving logs in" << log_file->fileName();
 
