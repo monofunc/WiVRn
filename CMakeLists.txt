@@ -176,6 +176,28 @@ if (WIVRN_BUILD_SERVER)
 endif()
 
 if (WIVRN_BUILD_DASHBOARD OR WIVRN_BUILD_SERVER)
+    if(APPLE)
+        # When building in a KDE Craft environment, Craft's pkg-config may resolve
+        # fontconfig to an older version that does not satisfy librsvg's requirement
+        # (>= 2.17.0).  Prepend Homebrew's pkgconfig directories so that Homebrew's
+        # librsvg and its dependencies (including fontconfig) are preferred.
+        find_program(_BREW brew)
+        if(_BREW)
+            execute_process(
+                COMMAND ${_BREW} --prefix
+                OUTPUT_VARIABLE _HOMEBREW_PREFIX
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+            )
+            if(_HOMEBREW_PREFIX)
+                set(ENV{PKG_CONFIG_PATH}
+                    "${_HOMEBREW_PREFIX}/lib/pkgconfig:${_HOMEBREW_PREFIX}/share/pkgconfig:$ENV{PKG_CONFIG_PATH}"
+                )
+            endif()
+        endif()
+        unset(_BREW CACHE)
+        unset(_HOMEBREW_PREFIX)
+    endif()
     pkg_check_modules(librsvg-2.0 REQUIRED IMPORTED_TARGET librsvg-2.0)
     if(APPLE)
         # pkg-config on macOS may report SDK include paths that do not exist

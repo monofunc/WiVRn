@@ -143,6 +143,12 @@ craft qcoro
 
 Craft automatically resolves and builds all transitive dependencies (Qt 6, KCoreAddons, KIconThemes, QQC2DesktopStyle, extra-cmake-modules, etc.).
 
+> [!NOTE]
+> `librsvg` must be installed via **Homebrew** (`brew install librsvg`), not through Craft.
+> Craft may ship an older `fontconfig` (< 2.17.0) that conflicts with `librsvg`'s dependency
+> requirements. CMake automatically prepends Homebrew's pkgconfig paths so that Homebrew's
+> `librsvg` and its dependencies are found first, even when the Craft environment is active.
+
 ### Compile
 
 Source the Craft environment, then compile both the server and the dashboard. CMake will automatically find the Qt and KDE Frameworks installed by Craft:
