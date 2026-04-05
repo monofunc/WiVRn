@@ -121,7 +121,7 @@ The dashboard can be built on macOS alongside the server. The D-Bus interface us
 
 ### Build dependencies
 
-The dashboard requires several KDE Frameworks 6 packages (Kirigami, KCoreAddons, KIconThemes, QQC2DesktopStyle, kirigami-addons) that are **not yet available in Homebrew** (neither Homebrew Core nor the official KDE tap). The recommended way to obtain these on macOS is via [KDE Craft](https://community.kde.org/Craft), the official KDE build framework for macOS.
+The dashboard requires several KDE Frameworks 6 packages (Kirigami, KCoreAddons, KIconThemes, kirigami-addons) that are **not yet available in Homebrew** (neither Homebrew Core nor the official KDE tap). The recommended way to obtain these on macOS is via [KDE Craft](https://community.kde.org/Craft), the official KDE build framework for macOS.
 
 #### 1. Install KDE Craft
 
@@ -141,7 +141,7 @@ craft kirigami-addons
 craft qcoro
 ```
 
-Craft automatically resolves and builds all transitive dependencies (Qt 6, KCoreAddons, KIconThemes, QQC2DesktopStyle, extra-cmake-modules, etc.).
+Craft automatically resolves and builds all transitive dependencies (Qt 6, KCoreAddons, KIconThemes, extra-cmake-modules, etc.).
 
 > [!NOTE]
 > `librsvg` must be installed via **Homebrew** (`brew install librsvg`), not through Craft.

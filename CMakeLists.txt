@@ -232,7 +232,7 @@ if (WIVRN_BUILD_DASHBOARD)
     find_package(ECM 5.115 REQUIRED NO_MODULE)
     list(APPEND CMAKE_MODULE_PATH "${ECM_MODULE_PATH}")
 
-    find_package(KF6 REQUIRED COMPONENTS Kirigami I18n CoreAddons QQC2DesktopStyle IconThemes)
+    find_package(KF6 REQUIRED COMPONENTS Kirigami I18n CoreAddons IconThemes)
     find_package(KF6Kirigami)
     find_package(nlohmann_json REQUIRED)
     find_package(QCoro6 REQUIRED COMPONENTS Core Network Qml)
