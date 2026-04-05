@@ -20,7 +20,7 @@ jobs:
 
     - name: Install Homebrew dependencies
       run: |
-        brew install cmake ninja pkg-config eigen nlohmann-json cli11 boost openssl librsvg molten-vk
+        brew install cmake ninja pkg-config eigen nlohmann-json cli11 boost openssl librsvg molten-vk libarchive
 
     - name: Prepare Vulkan SDK
       uses: humbletim/setup-vulkan-sdk@v1.2.1
