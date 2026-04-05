@@ -121,26 +121,34 @@ The dashboard can be built on macOS alongside the server. The D-Bus interface us
 
 ### Build dependencies
 
-In addition to the [macOS server prerequisites](#prerequisites), some KDE packages are not in Homebrew's default formula repository and require the KDE tap. Add it first:
+The dashboard requires several KDE Frameworks 6 packages (Kirigami, KCoreAddons, KIconThemes, QQC2DesktopStyle, kirigami-addons) that are **not yet available in Homebrew** (neither Homebrew Core nor the official KDE tap). The recommended way to obtain these on macOS is via [KDE Craft](https://community.kde.org/Craft), the official KDE build framework for macOS.
+
+#### 1. Install KDE Craft
+
+Requires Python 3 and Xcode Command Line Tools (already listed in [Prerequisites](#prerequisites)):
 
 ```bash
-brew tap kde-mac/kde https://invent.kde.org/packaging/homebrew-kde.git
+curl https://raw.githubusercontent.com/KDE/craft/master/setup/CraftBootstrap.py -o /tmp/setup.py
+python3 /tmp/setup.py --prefix ~/CraftRoot
 ```
 
-Then install all required packages:
+#### 2. Install KDE Framework dependencies via Craft
 
 ```bash
-brew install qt extra-cmake-modules qcoro6 ki18n \
-    kde-mac/kde/kf6-kirigami kde-mac/kde/kf6-kcoreaddons \
-    kde-mac/kde/kf6-qqc2-desktop-style kde-mac/kde/kf6-kiconthemes \
-    kde-mac/kde/kf6-kirigami-addons
+source ~/CraftRoot/craft/craftenv.sh
+craft kirigami
+craft kirigami-addons
+craft qcoro
 ```
+
+Craft automatically resolves and builds all transitive dependencies (Qt 6, KCoreAddons, KIconThemes, QQC2DesktopStyle, extra-cmake-modules, etc.).
 
 ### Compile
 
-From your checkout directory, compile both the server and the dashboard:
+Source the Craft environment, then compile both the server and the dashboard. CMake will automatically find the Qt and KDE Frameworks installed by Craft:
 
 ```bash
+source ~/CraftRoot/craft/craftenv.sh
 cmake -B build-dashboard . -GNinja -DWIVRN_BUILD_CLIENT=OFF -DWIVRN_BUILD_SERVER=ON -DWIVRN_BUILD_DASHBOARD=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
 cmake --build build-dashboard
 ```
