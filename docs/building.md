@@ -83,7 +83,7 @@ CMake automatically detects macOS and configures the build accordingly:
 - Uses VideoToolbox for hardware encoding
 - Uses CoreAudio for audio
 - Uses Bonjour (built into macOS) for headset discovery
-- Disables Linux-only features (systemd, avahi, dashboard, etc.)
+- Disables Linux-only features (systemd, avahi, etc.)
 
 The build produces two executables in `build-server/server/`:
 - `wivrn-server` — the main server process (manages connections and launches the compositor)
@@ -103,7 +103,9 @@ Make sure the headset connects **before** launching any VR application.
 
 The WiVRn dashboard requires Qt6, and the WiVRn server.
 
-## Compile
+## Dashboard (Linux)
+
+### Compile
 
 From your checkout directory, compile both the server and the dashboard:
 ```bash
@@ -112,6 +114,46 @@ cmake --build build-dashboard
 ```
 
 See [Server (PC, Linux)](#server-pc-linux) for the server compile options.
+
+## Dashboard (macOS)
+
+The dashboard can be built on macOS alongside the server. The D-Bus interface used on Linux is automatically disabled; all other features are available.
+
+### Build dependencies
+
+The dashboard requires several KDE Frameworks 6 packages (Kirigami, KCoreAddons, KIconThemes, QQC2DesktopStyle, kirigami-addons) that are **not yet available in Homebrew** (neither Homebrew Core nor the official KDE tap). The recommended way to obtain these on macOS is via [KDE Craft](https://community.kde.org/Craft), the official KDE build framework for macOS.
+
+#### 1. Install KDE Craft
+
+Requires Python 3 and Xcode Command Line Tools (already listed in [Prerequisites](#prerequisites)):
+
+```bash
+curl https://raw.githubusercontent.com/KDE/craft/master/setup/CraftBootstrap.py -o /tmp/setup.py
+python3 /tmp/setup.py --prefix ~/CraftRoot
+```
+
+#### 2. Install KDE Framework dependencies via Craft
+
+```bash
+source ~/CraftRoot/craft/craftenv.sh
+craft kirigami
+craft kirigami-addons
+craft qcoro
+```
+
+Craft automatically resolves and builds all transitive dependencies (Qt 6, KCoreAddons, KIconThemes, QQC2DesktopStyle, extra-cmake-modules, etc.).
+
+### Compile
+
+Source the Craft environment, then compile both the server and the dashboard. CMake will automatically find the Qt and KDE Frameworks installed by Craft:
+
+```bash
+source ~/CraftRoot/craft/craftenv.sh
+cmake -B build-dashboard . -GNinja -DWIVRN_BUILD_CLIENT=OFF -DWIVRN_BUILD_SERVER=ON -DWIVRN_BUILD_DASHBOARD=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build-dashboard
+```
+
+The dashboard executable `wivrn-dashboard` will be placed in `build-dashboard/dashboard/`.
 
 # Client (headset)
 
