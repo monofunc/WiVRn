@@ -25,10 +25,10 @@
 
 #include <algorithm>
 #include <filesystem>
-#include <format>
 #include <fstream>
 #include <limits>
 #include <optional>
+#include <string>
 
 namespace
 {
@@ -159,7 +159,7 @@ void find_icon_theme_dirs_helper(const std::vector<std::filesystem::path> & base
 			// FIXME: full theme support
 			for (int size: {256})
 				dirs.push_back(icon_theme_dir{
-				        .path = theme_dir / std::format("{}x{}/apps", size, size),
+				        .path = theme_dir / (std::to_string(size) + "x" + std::to_string(size) + "/apps"),
 				        .size = size,
 				        .scale = 1,
 				        .type = icon_theme_type::threshold,
