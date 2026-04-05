@@ -85,6 +85,7 @@ target_link_libraries(wivrn-dashboard
     wivrn-common-base
     wivrn-common-server
     wivrn-external
+    nlohmann_json::nlohmann_json
 )
 
 if(NOT APPLE)
