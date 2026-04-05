@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.28)
+
+# CMAKE_OSX_DEPLOYMENT_TARGET must be set before project() on macOS.
+# Minimum 13.3 is required for std::to_chars (floating-point overloads).
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "Minimum macOS deployment version")
+endif()
+
 project(WiVRn VERSION 0.0.0 LANGUAGES C CXX)
+
+if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "13.3")
+    message(FATAL_ERROR "macOS deployment target must be at least 13.3 (std::to_chars floating-point), got ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
 
 # Set default for FetchContent projects
 set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
