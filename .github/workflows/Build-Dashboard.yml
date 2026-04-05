@@ -1,0 +1,46 @@
+name: Build Dashboard
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-dashboard:
+    name: Linux Dashboard
+    runs-on: ubuntu-24.04
+    container: ubuntu:plucky
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Prepare
+      run: |
+        apt-get update
+        apt-get install --yes curl wget sudo jq cmake gcc g++ git pkgconf libboost-all-dev libkirigami-dev gettext libarchive-dev nlohmann-json3-dev qcoro-qt6-dev libkf6i18n-dev libkf6coreaddons-dev libkf6qqc2desktopstyle-dev libkf6iconthemes-dev libvulkan-dev libssl-dev librsvg2-dev extra-cmake-modules qml6-module-org-kde-kirigamiaddons-formcard
+
+    - uses: actions/cache@v4
+      with:
+        key: cmake-linux-dashboard
+        path: |
+          ${{github.workspace}}/cmake-fetch/*-subbuild/*-populate-prefix/src/*.tar.*
+          ${{github.workspace}}/cmake-fetch/*-subbuild/*-populate-prefix/src/*.zip
+          ${{github.workspace}}/cmake-fetch/*.tar.*
+          ${{github.workspace}}/cmake-fetch/*.tgz
+        restore-keys: cmake-linux-
+
+    - name: Configure CMake
+      run: >
+        cmake -B ${{github.workspace}}/build
+        -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}}
+        -DFETCHCONTENT_BASE_DIR=${{github.workspace}}/cmake-fetch
+        --preset dashboard
+        -DWIVRN_USE_SYSTEM_OPENXR=OFF
+        -DGIT_DESC=${{github.sha}}
+        -DGIT_COMMIT=${{github.sha}}
+
+    - name: Build
+      run: cmake --build ${{github.workspace}}/build --config ${{env.BUILD_TYPE}}

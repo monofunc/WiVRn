@@ -1,0 +1,90 @@
+name: Build macOS Dashboard
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: RelWithDebInfo
+  CRAFT_ROOT: ${{github.workspace}}/CraftRoot
+
+jobs:
+  build-macos-dashboard:
+    name: macOS Dashboard
+    runs-on: macos-14
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Install Homebrew dependencies
+      run: |
+        brew install cmake ninja pkg-config eigen nlohmann-json cli11 boost openssl librsvg python3
+
+    - name: Prepare Vulkan SDK
+      uses: humbletim/setup-vulkan-sdk@v1.2.1
+      with:
+        vulkan-query-version: 1.3.296.0
+        vulkan-components: Vulkan-Headers, Vulkan-Loader, Glslang, SPIRV-Reflect, SPIRV-Tools, MoltenVK
+        vulkan-use-cache: true
+
+    - name: Cache KDE Craft root
+      id: cache-craft
+      uses: actions/cache@v4
+      with:
+        key: craft-macos-arm64-kirigami-v1
+        path: ${{env.CRAFT_ROOT}}
+        restore-keys: craft-macos-arm64-
+
+    - name: Bootstrap KDE Craft
+      if: steps.cache-craft.outputs.cache-hit != 'true'
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/KDE/craft/master/setup/CraftBootstrap.py -o /tmp/CraftBootstrap.py
+        python3 /tmp/CraftBootstrap.py --prefix ${{env.CRAFT_ROOT}} --no-interactive
+
+    - name: Install KDE Framework dependencies via Craft
+      if: steps.cache-craft.outputs.cache-hit != 'true'
+      run: |
+        source ${{env.CRAFT_ROOT}}/craft/craftenv.sh
+        craft --no-cache kirigami
+        craft --no-cache kirigami-addons
+        craft --no-cache qcoro
+
+    - uses: actions/cache@v4
+      with:
+        key: cmake-macos-dashboard
+        path: |
+          ${{github.workspace}}/cmake-fetch/*-subbuild/*-populate-prefix/src/*.tar.*
+          ${{github.workspace}}/cmake-fetch/*-subbuild/*-populate-prefix/src/*.zip
+          ${{github.workspace}}/cmake-fetch/*.tar.*
+          ${{github.workspace}}/cmake-fetch/*.tgz
+        restore-keys: cmake-macos-dashboard-
+
+    - name: Configure CMake
+      run: |
+        source ${{env.CRAFT_ROOT}}/craft/craftenv.sh
+        cmake -B ${{github.workspace}}/build \
+          -GNinja \
+          -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
+          -DFETCHCONTENT_BASE_DIR=${{github.workspace}}/cmake-fetch \
+          -DWIVRN_BUILD_CLIENT=OFF \
+          -DWIVRN_BUILD_SERVER=ON \
+          -DWIVRN_BUILD_DASHBOARD=ON \
+          -DWIVRN_USE_SYSTEM_OPENXR=OFF \
+          -DGIT_DESC=${{github.sha}} \
+          -DGIT_COMMIT=${{github.sha}} \
+          ${{github.workspace}}
+
+    - name: Build
+      run: |
+        source ${{env.CRAFT_ROOT}}/craft/craftenv.sh
+        cmake --build ${{github.workspace}}/build
+
+    - name: Archive dashboard binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: wivrn-dashboard-macos
+        path: ${{github.workspace}}/build/dashboard/wivrn-dashboard
+        retention-days: 30
