@@ -42,7 +42,7 @@ jobs:
       if: steps.cache-craft.outputs.cache-hit != 'true'
       run: |
         curl -fsSL https://raw.githubusercontent.com/KDE/craft/master/setup/CraftBootstrap.py -o /tmp/CraftBootstrap.py
-        python3 /tmp/CraftBootstrap.py --prefix ${{env.CRAFT_ROOT}} --no-interactive
+        python3 /tmp/CraftBootstrap.py --prefix ${{env.CRAFT_ROOT}} --use-defaults
 
     - name: Install KDE Framework dependencies via Craft
       if: steps.cache-craft.outputs.cache-hit != 'true'
