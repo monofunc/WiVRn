@@ -23,7 +23,6 @@
 #include <bit>
 #include <charconv>
 #include <cstring>
-#include <format>
 #include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
@@ -298,7 +297,7 @@ void read_steam_shortcuts(
 						icons[current.appid] = std::move(icon);
 					// ¯\_(ツ)_/¯
 					current.appid = (current.appid << 32) | 0x02000000;
-					current.url = std::format("steam://rungameid/{}", current.appid);
+					current.url = "steam://rungameid/" + std::to_string(current.appid);
 					apps.push_back(std::move(current));
 				}
 			}
