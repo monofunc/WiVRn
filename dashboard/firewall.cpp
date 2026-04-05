@@ -23,9 +23,11 @@
 #include "utils/flatpak.h"
 #include "wivrn_config.h"
 
+#ifndef Q_OS_MACOS
 #include <QDBusInterface>
 #include <QDBusMetaType>
 #include <QDBusReply>
+#endif
 #include <QDebug>
 #include <QProcess>
 #include <filesystem>
@@ -44,6 +46,7 @@ Q_SIGNALS:
 	void needSetupChanged(bool);
 };
 
+#ifndef Q_OS_MACOS
 class ufw : public firewall::Impl
 {
 	std::unique_ptr<QProcess> pkexec;
@@ -166,15 +169,17 @@ public:
 		needSetupChanged(false);
 	}
 };
+#endif // !Q_OS_MACOS
 
 std::unique_ptr<firewall::Impl> make_impl()
 {
+#ifndef Q_OS_MACOS
 	if (auto fwd = std::make_unique<firewalld>(); fwd->enabled())
 		return fwd;
 
 	if (not find_executable("ufw").isEmpty())
 		return std::make_unique<ufw>();
-
+#endif
 	return std::make_unique<firewall::Impl>();
 }
 

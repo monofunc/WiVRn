@@ -27,9 +27,11 @@ add_executable(wivrn-dashboard
     vulkan_info.cpp
 )
 
-set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/../dbus/io.github.wivrn.Server.xml PROPERTIES INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/wivrn_qdbus_types.h")
-qt_add_dbus_interface(DBUS_INTERFACE_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../dbus/io.github.wivrn.Server.xml wivrn_server_dbus)
-target_sources(wivrn-dashboard PRIVATE ${DBUS_INTERFACE_SRC})
+if(NOT APPLE)
+    set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/../dbus/io.github.wivrn.Server.xml PROPERTIES INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/wivrn_qdbus_types.h")
+    qt_add_dbus_interface(DBUS_INTERFACE_SRC ${CMAKE_CURRENT_SOURCE_DIR}/../dbus/io.github.wivrn.Server.xml wivrn_server_dbus)
+    target_sources(wivrn-dashboard PRIVATE ${DBUS_INTERFACE_SRC})
+endif()
 
 set_source_files_properties(../images/wivrn.svg PROPERTIES QT_RESOURCE_ALIAS qml/wivrn.svg)
 qt_add_resources(wivrn-dashboard PREFIX "/" BASE .. FILES ../images/wivrn.svg)
@@ -68,7 +70,6 @@ configure_file(io.github.wivrn.wivrn.desktop.in io.github.wivrn.wivrn.desktop)
 
 target_link_libraries(wivrn-dashboard
     PRIVATE
-    Qt6::DBus
     Qt6::Quick
     Qt6::Qml
     Qt6::Gui
@@ -85,6 +86,10 @@ target_link_libraries(wivrn-dashboard
     wivrn-common-server
     wivrn-external
 )
+
+if(NOT APPLE)
+    target_link_libraries(wivrn-dashboard PRIVATE Qt6::DBus)
+endif()
 
 install(TARGETS wivrn-dashboard ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
 
