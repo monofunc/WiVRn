@@ -121,10 +121,19 @@ The dashboard can be built on macOS alongside the server. The D-Bus interface us
 
 ### Build dependencies
 
-In addition to the [macOS server prerequisites](#prerequisites), install the following packages with Homebrew:
+In addition to the [macOS server prerequisites](#prerequisites), some KDE packages are not in Homebrew's default formula repository and require the KDE tap. Add it first:
 
 ```bash
-brew install qt extra-cmake-modules qcoro kirigami ki18n kcoreaddons qqc2-desktop-style kiconthemes kirigami-addons
+brew tap kde-mac/kde https://invent.kde.org/packaging/homebrew-kde.git
+```
+
+Then install all required packages:
+
+```bash
+brew install qt extra-cmake-modules qcoro6 ki18n \
+    kde-mac/kde/kf6-kirigami kde-mac/kde/kf6-kcoreaddons \
+    kde-mac/kde/kf6-qqc2-desktop-style kde-mac/kde/kf6-kiconthemes \
+    kde-mac/kde/kf6-kirigami-addons
 ```
 
 ### Compile
