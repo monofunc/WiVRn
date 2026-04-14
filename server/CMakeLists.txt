@@ -129,7 +129,7 @@ if (APPLE AND WIVRN_BUILD_SERVER)
 	target_include_directories(wivrn-compositor PRIVATE .)
 	target_link_libraries(wivrn-compositor PRIVATE
 		CLI11::CLI11 xrt-external-renderdoc
-		aux_os aux_util aux_vk comp_main ipc_server
+		aux_os aux_util aux_vk base comp_main ipc_server target_helpers
 		xrt-external-openxr xrt-interfaces
 		Eigen3::Eigen
 		wivrn-common wivrn-common-server wivrn-external
