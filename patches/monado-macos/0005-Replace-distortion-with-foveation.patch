@@ -1,7 +1,7 @@
-From 4b5685fc3177fd2f54996e0a87c1efe985db9c7b Mon Sep 17 00:00:00 2001
+From 1b97edeff4a704e9b0d2900845e507909b4e0624 Mon Sep 17 00:00:00 2001
 From: Patrick Nicolas <patricknicolas@laposte.net>
 Date: Wed, 11 Sep 2024 22:56:29 +0200
-Subject: [PATCH 5/9] Replace distortion with foveation
+Subject: [PATCH] Replace distortion with foveation
 
 ---
  src/xrt/compositor/main/comp_renderer.c       |   6 +-
@@ -647,7 +647,7 @@ index 62d7138b9..44c3f0aee 100644
  	    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
  	    .image = target_image,
 diff --git a/src/xrt/compositor/render/render_interface.h b/src/xrt/compositor/render/render_interface.h
-index 8a198707f..a4b5c53a2 100644
+index 466341c7f..8eca11685 100644
 --- a/src/xrt/compositor/render/render_interface.h
 +++ b/src/xrt/compositor/render/render_interface.h
 @@ -83,12 +83,8 @@ extern "C" {
@@ -720,7 +720,7 @@ index 8a198707f..a4b5c53a2 100644
  	} distortion;
  };
  
-@@ -1315,6 +1297,14 @@ struct render_compute_distortion_ubo_data
+@@ -1335,6 +1317,14 @@ struct render_compute_distortion_ubo_data
  	struct xrt_matrix_4x4 transform_timewarp_scanout_end[XRT_MAX_VIEWS];
  };
  
@@ -735,7 +735,7 @@ index 8a198707f..a4b5c53a2 100644
  /*!
   * Init struct and create resources needed for compute rendering.
   *
-@@ -1368,7 +1358,8 @@ render_compute_layers(struct render_compute *render,
+@@ -1388,7 +1378,8 @@ render_compute_layers(struct render_compute *render,
                        VkSampler src_samplers[RENDER_MAX_IMAGES_SIZE],
                        VkImageView src_image_views[RENDER_MAX_IMAGES_SIZE],
                        uint32_t num_srcs,
@@ -745,7 +745,7 @@ index 8a198707f..a4b5c53a2 100644
                        const struct render_viewport_data *view,
                        bool timewarp);
  
-@@ -1376,44 +1367,14 @@ render_compute_layers(struct render_compute *render,
+@@ -1396,44 +1387,14 @@ render_compute_layers(struct render_compute *render,
   * @public @memberof render_compute
   */
  void
@@ -798,7 +798,7 @@ index 8a198707f..a4b5c53a2 100644
  
  /*!
   * @public @memberof render_compute
-@@ -1421,7 +1382,8 @@ render_compute_projection_no_timewarp(struct render_compute *render,
+@@ -1441,7 +1402,8 @@ render_compute_projection_no_timewarp(struct render_compute *render,
  void
  render_compute_clear(struct render_compute *render,
                       VkImage target_image,
@@ -1407,10 +1407,10 @@ index bd7ab2957..c2b95d68d 100644
                       bool do_timewarp);
  
 diff --git a/src/xrt/compositor/util/comp_render_cs.c b/src/xrt/compositor/util/comp_render_cs.c
-index a2b6e0d01..0868e515b 100644
+index ff7313f6f..65fc7ed4b 100644
 --- a/src/xrt/compositor/util/comp_render_cs.c
 +++ b/src/xrt/compositor/util/comp_render_cs.c
-@@ -370,7 +370,8 @@ crc_clear_output(struct render_compute *render, const struct comp_render_dispatc
+@@ -383,7 +383,8 @@ crc_clear_output(struct render_compute *render, const struct comp_render_dispatc
  	render_compute_clear(          //
  	    render,                    //
  	    d->target.cs.image,        //
@@ -1420,7 +1420,7 @@ index a2b6e0d01..0868e515b 100644
  	    target_viewport_datas);    // views
  }
  
-@@ -396,9 +397,6 @@ crc_distortion_after_squash(struct render_compute *render, const struct comp_ren
+@@ -409,9 +410,6 @@ crc_distortion_after_squash(struct render_compute *render, const struct comp_ren
  	VkSampler src_samplers[XRT_MAX_VIEWS];
  	struct render_viewport_data target_viewport_datas[XRT_MAX_VIEWS];
  	struct xrt_normalized_rect src_norm_rects[XRT_MAX_VIEWS];
@@ -1430,7 +1430,7 @@ index a2b6e0d01..0868e515b 100644
  
  	for (uint32_t i = 0; i < d->target.view_count; i++) {
  		// Data to be filled in.
-@@ -416,36 +414,17 @@ crc_distortion_after_squash(struct render_compute *render, const struct comp_ren
+@@ -429,36 +427,17 @@ crc_distortion_after_squash(struct render_compute *render, const struct comp_ren
  		src_norm_rects[i] = src_norm_rect;
  		src_samplers[i] = clamp_to_border_black;
  		target_viewport_datas[i] = viewport_data;
@@ -1476,7 +1476,7 @@ index a2b6e0d01..0868e515b 100644
  }
  
  /// Fast path
-@@ -471,20 +450,12 @@ crc_distortion_fast_path(struct render_compute *render,
+@@ -484,20 +463,12 @@ crc_distortion_fast_path(struct render_compute *render,
  	VkSampler src_samplers[XRT_MAX_VIEWS];
  	struct render_viewport_data target_viewport_datas[XRT_MAX_VIEWS];
  	struct xrt_normalized_rect src_norm_rects[XRT_MAX_VIEWS];
@@ -1497,7 +1497,7 @@ index a2b6e0d01..0868e515b 100644
  		uint32_t array_index = vds[i]->sub.array_index;
  		const struct comp_swapchain_image *image = get_layer_image(layer, i, vds[i]->sub.image_index);
  
-@@ -492,10 +463,6 @@ crc_distortion_fast_path(struct render_compute *render,
+@@ -505,10 +476,6 @@ crc_distortion_fast_path(struct render_compute *render,
  		src_image_view = get_image_view(image, data->flags, array_index);
  		src_norm_rect = vds[i]->sub.norm_rect;
  		viewport_data = d->views[i].target.viewport_data;
@@ -1508,7 +1508,7 @@ index a2b6e0d01..0868e515b 100644
  
  		// No layer squasher has handled this for us already
  		if (data->flip_y) {
-@@ -508,35 +475,17 @@ crc_distortion_fast_path(struct render_compute *render,
+@@ -521,35 +488,17 @@ crc_distortion_fast_path(struct render_compute *render,
  		src_norm_rects[i] = src_norm_rect;
  		src_samplers[i] = clamp_to_border_black;
  		target_viewport_datas[i] = viewport_data;
@@ -1553,7 +1553,7 @@ index a2b6e0d01..0868e515b 100644
  }
  
  
-@@ -556,7 +505,8 @@ comp_render_cs_layer(struct render_compute *render,
+@@ -569,7 +518,8 @@ comp_render_cs_layer(struct render_compute *render,
                       const struct xrt_pose *world_pose_scanout_end,
                       const struct xrt_pose *eye_pose,
                       const VkImage target_image,
@@ -1563,7 +1563,7 @@ index a2b6e0d01..0868e515b 100644
                       const struct render_viewport_data *target_view,
                       bool do_timewarp)
  {
-@@ -564,9 +514,9 @@ comp_render_cs_layer(struct render_compute *render,
+@@ -577,9 +527,9 @@ comp_render_cs_layer(struct render_compute *render,
  	VkSampler clamp_to_border_black = render->r->samplers.clamp_to_border_black;
  
  	// Not the transform of the views, but the inverse: actual view matrices.
@@ -1575,7 +1575,7 @@ index a2b6e0d01..0868e515b 100644
  
  	struct render_buffer *ubo = &render->r->compute.layer.ubos[view_index];
  	struct render_compute_layer_ubo_data *ubo_data = ubo->mapped;
-@@ -618,7 +568,7 @@ comp_render_cs_layer(struct render_compute *render,
+@@ -636,7 +586,7 @@ comp_render_cs_layer(struct render_compute *render,
  		case XRT_LAYER_CYLINDER:
  			do_cs_cylinder_layer(              //
  			    layer,                         // layer
@@ -1584,7 +1584,7 @@ index a2b6e0d01..0868e515b 100644
  			    &world_view_mat_scanout_begin, // world_view_mat
  			    view_index,                    // view_index
  			    cur_layer,                     // cur_layer
-@@ -633,7 +583,7 @@ comp_render_cs_layer(struct render_compute *render,
+@@ -651,7 +601,7 @@ comp_render_cs_layer(struct render_compute *render,
  		case XRT_LAYER_EQUIRECT2:
  			do_cs_equirect2_layer(             //
  			    layer,                         // layer
@@ -1593,7 +1593,7 @@ index a2b6e0d01..0868e515b 100644
  			    &world_view_mat_scanout_begin, // world_view_mat
  			    view_index,                    // view_index
  			    cur_layer,                     // cur_layer
-@@ -649,7 +599,7 @@ comp_render_cs_layer(struct render_compute *render,
+@@ -667,7 +617,7 @@ comp_render_cs_layer(struct render_compute *render,
  		case XRT_LAYER_PROJECTION: {
  			do_cs_projection_layer(       //
  			    layer,                    // layer
@@ -1602,7 +1602,7 @@ index a2b6e0d01..0868e515b 100644
  			    view_index,               // view_index
  			    cur_layer,                // cur_layer
  			    cur_image,                // cur_image
-@@ -664,8 +614,8 @@ comp_render_cs_layer(struct render_compute *render,
+@@ -682,8 +632,8 @@ comp_render_cs_layer(struct render_compute *render,
  		case XRT_LAYER_QUAD: {
  			do_cs_quad_layer(                  //
  			    layer,                         // layer
@@ -1613,7 +1613,7 @@ index a2b6e0d01..0868e515b 100644
  			    view_index,                    // view_index
  			    cur_layer,                     // cur_layer
  			    cur_image,                     // cur_image
-@@ -716,7 +666,8 @@ comp_render_cs_layer(struct render_compute *render,
+@@ -734,7 +684,8 @@ comp_render_cs_layer(struct render_compute *render,
  	    src_samplers,      //
  	    src_image_views,   //
  	    cur_image,         //
@@ -1623,7 +1623,7 @@ index a2b6e0d01..0868e515b 100644
  	    target_view,       //
  	    do_timewarp);      //
  }
-@@ -753,6 +704,7 @@ comp_render_cs_layers(struct render_compute *render,
+@@ -771,6 +722,7 @@ comp_render_cs_layers(struct render_compute *render,
  		    &view->eye_pose,                 //
  		    view->squash.image,              //
  		    view->squash.cs.storage_view,    //
@@ -1632,5 +1632,5 @@ index a2b6e0d01..0868e515b 100644
  		    d->do_timewarp);                 //
  	}
 -- 
-2.53.0
+2.50.1 (Apple Git-155)
 

@@ -1,4 +1,4 @@
-From 2a1288669b260950fd34f153e41452bf49b30c14 Mon Sep 17 00:00:00 2001
+From 7e9e82fa862ae73b6abe0cc55e11fc5989b67051 Mon Sep 17 00:00:00 2001
 From: Mono <81423605+monofunc@users.noreply.github.com>
 Date: Thu, 2 Apr 2026 00:44:28 +0400
 Subject: [PATCH] ipc/server: Add client_described callback
@@ -13,10 +13,10 @@ The existing client_connected callback fires before the client sends its descrip
  2 files changed, 16 insertions(+)
 
 diff --git a/src/xrt/ipc/server/ipc_server_handler.c b/src/xrt/ipc/server/ipc_server_handler.c
-index c5cecd64a..a674e26e0 100644
+index c09749fae..d40c7617d 100644
 --- a/src/xrt/ipc/server/ipc_server_handler.c
 +++ b/src/xrt/ipc/server/ipc_server_handler.c
-@@ -464,6 +464,13 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
+@@ -430,6 +430,13 @@ ipc_handle_instance_describe_client(volatile struct ipc_client_state *ics,
  	// Log the pretty message.
  	IPC_INFO(ics->server, "%s", sink.buffer);
  

@@ -1,4 +1,4 @@
-From 5dc713a2b92c8a7d438b56cbe909ec0b7d7ba224 Mon Sep 17 00:00:00 2001
+From 8c3669c05da6dbfefdbbea056c06267a22bf7beb Mon Sep 17 00:00:00 2001
 From: Patrick Nicolas <patricknicolas@laposte.net>
 Date: Fri, 27 Mar 2026 02:23:12 +0400
 Subject: [PATCH] c/multi: early wake of compositor
@@ -10,7 +10,7 @@ Subject: [PATCH] c/multi: early wake of compositor
  3 files changed, 52 insertions(+), 7 deletions(-)
 
 diff --git a/src/xrt/compositor/multi/comp_multi_compositor.c b/src/xrt/compositor/multi/comp_multi_compositor.c
-index 80f2d6249..ea91a83c9 100644
+index ac0cd6651..89f7bbb8f 100644
 --- a/src/xrt/compositor/multi/comp_multi_compositor.c
 +++ b/src/xrt/compositor/multi/comp_multi_compositor.c
 @@ -236,7 +236,21 @@ wait_for_scheduled_free(struct multi_compositor *mc)
@@ -36,10 +36,10 @@ index 80f2d6249..ea91a83c9 100644
  
  static void *
 diff --git a/src/xrt/compositor/multi/comp_multi_private.h b/src/xrt/compositor/multi/comp_multi_private.h
-index 3351defa4..e8f0c8295 100644
+index 6c7ec05f8..588878e38 100644
 --- a/src/xrt/compositor/multi/comp_multi_private.h
 +++ b/src/xrt/compositor/multi/comp_multi_private.h
-@@ -359,6 +359,10 @@ struct multi_system_compositor
+@@ -365,6 +365,10 @@ struct multi_system_compositor
  	 */
  	struct os_mutex list_and_timing_lock;
  
@@ -51,10 +51,10 @@ index 3351defa4..e8f0c8295 100644
  	{
  		int64_t predicted_display_time_ns;
 diff --git a/src/xrt/compositor/multi/comp_multi_system.c b/src/xrt/compositor/multi/comp_multi_system.c
-index aaf784d6c..662e73c1c 100644
+index d0bfb2c31..a4623b5ea 100644
 --- a/src/xrt/compositor/multi/comp_multi_system.c
 +++ b/src/xrt/compositor/multi/comp_multi_system.c
-@@ -24,6 +24,8 @@
+@@ -25,6 +25,8 @@
  #include "util/u_trace_marker.h"
  #include "util/u_distortion_mesh.h"
  
@@ -63,7 +63,7 @@ index aaf784d6c..662e73c1c 100644
  #ifdef XRT_OS_LINUX
  #include "util/u_linux.h"
  #endif
-@@ -393,17 +395,35 @@ broadcast_timings_to_pacers(struct multi_system_compositor *msc,
+@@ -429,17 +431,35 @@ broadcast_timings_to_pacers(struct multi_system_compositor *msc,
  }
  
  static void
@@ -104,7 +104,7 @@ index aaf784d6c..662e73c1c 100644
  }
  
  static void
-@@ -530,10 +550,13 @@ multi_main_loop(struct multi_system_compositor *msc)
+@@ -566,10 +586,13 @@ multi_main_loop(struct multi_system_compositor *msc)
  		broadcast_timings_to_clients(msc, predicted_display_time_ns);
  
  		// Now we can wait.
@@ -120,7 +120,7 @@ index aaf784d6c..662e73c1c 100644
  
  		// Now we know the diff, broadcast to pacers.
  		broadcast_timings_to_pacers(msc, predicted_display_time_ns, predicted_display_period_ns, diff_ns);
-@@ -721,6 +744,8 @@ system_compositor_destroy(struct xrt_system_compositor *xsc)
+@@ -789,6 +812,8 @@ system_compositor_destroy(struct xrt_system_compositor *xsc)
  	xrt_comp_native_destroy(&msc->xcn);
  
  	os_mutex_destroy(&msc->list_and_timing_lock);
@@ -129,8 +129,8 @@ index aaf784d6c..662e73c1c 100644
  
  	free(msc);
  }
-@@ -775,6 +800,8 @@ comp_multi_create_system_compositor(struct xrt_compositor_native *xcn,
- 	msc->sessions.state = do_warm_start ? MULTI_SYSTEM_STATE_INIT_WARM_START : MULTI_SYSTEM_STATE_STOPPED;
+@@ -847,6 +872,8 @@ comp_multi_create_system_compositor(struct xrt_compositor_native *xcn,
+ 	msc->get_view_config_callback = get_view_config_callback;
  
  	os_mutex_init(&msc->list_and_timing_lock);
 +	os_mutex_init(&msc->wake_mutex);

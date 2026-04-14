@@ -1,7 +1,7 @@
-From 025dcad51542cd6c23d9a6ad16cca982bf2fa5ca Mon Sep 17 00:00:00 2001
+From ad56fcf416488a892831802ef4e19b0180384598 Mon Sep 17 00:00:00 2001
 From: no name <git-am@invalid>
 Date: Thu, 15 Jan 2026 12:13:06 +0100
-Subject: [PATCH 8/9] Don't get pose data in compositor
+Subject: [PATCH] Don't get pose data in compositor
 
 Reproject onto the first projection layer's pose, if there isn't any get
 it from device instead.
@@ -81,5 +81,5 @@ index ff9728a59..4a91bbcd0 100644
  	// Target Vulkan resources..
  	VkImage target_image = r->c->target->images[r->acquired_buffer].handle;
 -- 
-2.53.0
+2.50.1 (Apple Git-155)
 

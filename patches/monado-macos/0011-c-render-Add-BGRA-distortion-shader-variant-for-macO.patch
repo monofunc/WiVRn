@@ -1,4 +1,4 @@
-From bd487031aa72ca3669cc0584d56b0314bad3c416 Mon Sep 17 00:00:00 2001
+From a08f727f1b6ad5e6735933e19fd26250657892c6 Mon Sep 17 00:00:00 2001
 From: Mono <81423605+monofunc@users.noreply.github.com>
 Date: Wed, 1 Apr 2026 18:01:26 +0400
 Subject: [PATCH] c/render: Add BGRA distortion shader variant for macOS
@@ -41,7 +41,7 @@ index 44c3f0aee..4231813a7 100644
  	vk->vkCmdBindDescriptorSets(               //
  	    r->cmd,                                //
 diff --git a/src/xrt/compositor/render/render_interface.h b/src/xrt/compositor/render/render_interface.h
-index a4b5c53a2..a1b11299a 100644
+index 8eca11685..2d7a897d4 100644
 --- a/src/xrt/compositor/render/render_interface.h
 +++ b/src/xrt/compositor/render/render_interface.h
 @@ -328,6 +328,9 @@ struct render_resources
