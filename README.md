@@ -8,6 +8,81 @@ Known issues:
 * No GUI
 * No encryption
 
+### Prerequisites
+
+* macOS 15+
+* Xcode with macOS platform support and Metal toolchain
+* Homebrew
+* A supported Android VR headset (Quest 3, Pico 4, etc.)
+
+Install server dependencies:
+
+```bash
+brew install cmake ninja eigen vulkan-tools libarchive pkgconf openssl boost nlohmann-json cli11 librsvg
+```
+
+The server and headset client must be on the same version, so you need to build the client yourself. Install the Android toolchain:
+
+```bash
+brew install openjdk@17 android-commandlinetools android-platform-tools
+```
+
+Install [KTX-Software](https://github.com/KhronosGroup/KTX-Software/releases/latest) (provides `toktx`, needed for texture compression). Download and run the `.pkg` installer.
+
+Set the Android environment:
+
+```bash
+export JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home
+export ANDROID_HOME=/opt/homebrew/share/android-commandlinetools
+```
+
+Install the NDK and SDK platform:
+
+```bash
+sdkmanager --licenses
+sdkmanager --install "platforms;android-34" "ndk;28.2.13676358" "cmake;3.31.5"
+```
+
+### Building
+
+Clone this repo, switch to the `feature/macos` branch, and build:
+
+```bash
+cmake --preset server-macos -DCMAKE_PREFIX_PATH="/opt/homebrew/opt/libarchive;/opt/homebrew/opt/openssl"
+cmake --build build-server-macos
+cmake --build build-server-macos --target openxr_wivrn
+```
+
+Build the debug APK and install it on the headset (enable USB debugging on the headset first):
+
+```bash
+./gradlew assembleDebug
+adb install build/outputs/apk/debug/WiVRn-debug.apk
+```
+
+The app installs as `org.meumeu.wivrn.local` and appears in the headset's app library under "Unknown Sources".
+
+### Setup
+
+Register the IPC broker with launchctl:
+
+```bash
+cp build-server-macos/_deps/monado-build/src/xrt/targets/broker/org.wivrn.compositor.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/org.wivrn.compositor.plist
+```
+
+The plist has the absolute path to `monado-broker` baked in at build time. If you move your build dir, rebuild and re-copy.
+
+### Running
+
+Start the server:
+
+```bash
+VK_ICD_FILENAMES=/opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json build-server-macos/server/wivrn-server --no-encrypt
+```
+
+Open the WiVRn app on your headset. It should find your Mac via Bonjour. Tap to connect.
+
 ---
 
 <h1 align="center"> WiVRn </h1>
