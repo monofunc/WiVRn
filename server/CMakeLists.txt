@@ -161,7 +161,6 @@ if (APPLE AND WIVRN_BUILD_SERVER)
 	endif()
 
 	add_executable(wivrn-server
-		accept_connection.cpp
 		active_runtime.cpp
 		bonjour_publisher.cpp
 		compositor_bootstrap.cpp

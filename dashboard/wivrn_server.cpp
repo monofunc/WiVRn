@@ -20,16 +20,23 @@
 #include "gui_config.h"
 #include "magic_enum.hpp"
 #include "utils/flatpak.h"
+#ifndef Q_OS_MACOS
 #include "wivrn_server_dbus.h"
+#endif
 #include <KLocalization>
 #include <QApplication>
 #include <QClipboard>
 #include <QDesktopServices>
 #include <QtLogging>
 #include <cassert>
+#include <climits>
 #include <memory>
 #include <nlohmann/json.hpp>
 #include <unistd.h>
+
+#ifndef HOST_NAME_MAX
+#define HOST_NAME_MAX 255
+#endif
 
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vulkan_raii.hpp>
@@ -44,6 +51,7 @@ static QString server_path()
 wivrn_server::wivrn_server(QObject * parent) :
         QObject(parent)
 {
+#ifndef Q_OS_MACOS
 	dbus_watcher.setConnection(QDBusConnection::sessionBus());
 	dbus_watcher.addWatchedService("io.github.wivrn.Server");
 
@@ -53,6 +61,7 @@ wivrn_server::wivrn_server(QObject * parent) :
 	const QStringList services = QDBusConnection::sessionBus().interface()->registeredServiceNames();
 	if (services.contains("io.github.wivrn.Server"))
 		on_server_dbus_registered();
+#endif
 }
 
 wivrn_server::~wivrn_server()
@@ -101,7 +110,8 @@ std::unique_ptr<QFile> get_server_log_file()
 	}
 
 	std::unique_ptr<QFile> log_file = std::make_unique<QFile>(state_path + "/server_logs_" + QDateTime::currentDateTime().toString(Qt::ISODate) + ".txt");
-	log_file->open(QFile::WriteOnly | QFile::Truncate);
+	if (!log_file->open(QFile::WriteOnly | QFile::Truncate))
+		qWarning() << "Failed to open log file" << log_file->fileName();
 
 	qDebug() << "Saving logs in" << log_file->fileName();
 
@@ -134,12 +144,31 @@ void wivrn_server::start_server()
 
 					if (m_serverStatus == Status::Starting)
 					{
+#ifndef Q_OS_MACOS
 						qDebug() << "Server finished before registering on dbus";
+#endif
 						serverStatusChanged(m_serverStatus = Status::FailedToStart);
 					}
+#ifdef Q_OS_MACOS
+					else if (m_serverStatus == Status::Started || m_serverStatus == Status::Stopping)
+					{
+						serverStatusChanged(m_serverStatus = Status::Stopped);
+						if (isHeadsetConnected())
+							headsetConnectedChanged(m_headsetConnected = false);
+						if (isSessionRunning())
+							sessionRunningChanged(m_sessionRunning = false);
+					}
+#endif
 					ownServerChanged();
 				}
 			});
+
+#ifdef Q_OS_MACOS
+			connect(server_process, &QProcess::started, this, [this]() {
+				serverStatusChanged(m_serverStatus = Status::Started);
+				ownServerChanged();
+			});
+#endif
 
 			server_process->start(server_path(), QApplication::arguments().mid(1));
 			ownServerChanged();
@@ -159,8 +188,13 @@ void wivrn_server::stop_server()
 	if (serverStatus() == Status::Started)
 	{
 		serverStatusChanged(m_serverStatus = Status::Stopping);
+#ifndef Q_OS_MACOS
 		if (server_interface)
 			server_interface->Quit();
+#else
+		if (server_process)
+			server_process->terminate();
+#endif
 	}
 	else
 		qWarning() << "stop_server: unexpected status " << std::string(magic_enum::enum_name(serverStatus()));
@@ -171,8 +205,13 @@ void wivrn_server::restart_server()
 	if (serverStatus() == Status::Started)
 	{
 		serverStatusChanged(m_serverStatus = Status::Restarting);
+#ifndef Q_OS_MACOS
 		if (server_interface)
 			server_interface->Quit();
+#else
+		if (server_process)
+			server_process->terminate();
+#endif
 	}
 	else
 		qWarning() << "restart_server: unexpected status " << std::string(magic_enum::enum_name(serverStatus()));
@@ -218,6 +257,7 @@ void wivrn_server::on_server_ready_read_standard_output()
 	serverLogsChanged(serverLogs());
 }
 
+#ifndef Q_OS_MACOS
 void wivrn_server::on_server_dbus_registered()
 {
 	serverStatusChanged(m_serverStatus = Status::Started);
@@ -262,13 +302,6 @@ void wivrn_server::on_server_dbus_unregistered()
 
 	if (serverStatus() == Status::Restarting)
 		start_server();
-}
-
-void wivrn_server::open_server_logs()
-{
-	QString path = get_server_log_dir();
-	qDebug() << "Opening" << path;
-	QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }
 
 void wivrn_server::refresh_server_properties()
@@ -451,45 +484,64 @@ void wivrn_server::on_server_properties_changed(const QString & interface_name, 
 		steamCommandChanged(m_steamCommand = changed_properties["SteamCommand"].toString());
 	}
 }
+#endif // !Q_OS_MACOS
+
+void wivrn_server::open_server_logs()
+{
+	QString path = get_server_log_dir();
+	qDebug() << "Opening" << path;
+	QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+}
 
 void wivrn_server::setJsonConfiguration(QString new_configuration)
 {
+#ifndef Q_OS_MACOS
 	if (server_interface)
 	{
 		server_interface->setJsonConfiguration(m_jsonConfiguration = new_configuration);
 		jsonConfigurationChanged(new_configuration);
 	}
+#endif
 }
 
 void wivrn_server::revoke_key(QString public_key)
 {
+#ifndef Q_OS_MACOS
 	if (server_interface)
 		server_interface->RevokeKey(public_key);
+#endif
 }
 
 void wivrn_server::rename_key(QString public_key, QString name)
 {
+#ifndef Q_OS_MACOS
 	if (server_interface)
 		server_interface->RenameKey(public_key, name);
+#endif
 }
 
 QString wivrn_server::enable_pairing(int timeout_secs)
 {
 	qDebug() << "Enabling pairing for" << timeout_secs << "seconds";
+#ifndef Q_OS_MACOS
 	if (server_interface)
 		return server_interface->EnablePairing(timeout_secs).value();
+#endif
 	return "";
 }
 
 void wivrn_server::disable_pairing()
 {
+#ifndef Q_OS_MACOS
 	if (server_interface)
 		server_interface->DisablePairing();
+#endif
 }
 
 QString wivrn_server::hostname()
 {
 	static auto _hostname = []() -> QString {
+#ifndef Q_OS_MACOS
 		OrgFreedesktopDBusPropertiesInterface hostname1("org.freedesktop.hostname1", "/org/freedesktop/hostname1", QDBusConnection::systemBus());
 
 		for (auto property: {"PrettyHostname", "StaticHostname", "Hostname"})
@@ -499,6 +551,7 @@ QString wivrn_server::hostname()
 			if (name != "")
 				return name;
 		};
+#endif
 
 		char buf[HOST_NAME_MAX];
 		int code = gethostname(buf, sizeof(buf));
@@ -514,6 +567,9 @@ QString wivrn_server::hostname()
 
 QString wivrn_server::host_path(QString path)
 {
+#ifndef Q_OS_MACOS
+	// On Linux, resolve Flatpak document portal paths to host paths.
+	// Flatpak is not available on macOS, so always return the path unchanged.
 	if (not wivrn::is_flatpak())
 		return path;
 
@@ -530,6 +586,7 @@ QString wivrn_server::host_path(QString path)
 	path = res.value().first();
 	if (path.endsWith('\0'))
 		path.chop(1);
+#endif
 	return path;
 }
 
@@ -552,8 +609,10 @@ QList<openVRCompatLib> wivrn_server::openVRCompat() const
 
 void wivrn_server::disconnect_headset()
 {
+#ifndef Q_OS_MACOS
 	if (server_interface)
 		server_interface->Disconnect();
+#endif
 }
 
 void wivrn_server::copy_steam_command()

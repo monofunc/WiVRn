@@ -21,26 +21,41 @@
 #include "dashboard_utils.h"
 #include "escape_sandbox.h"
 
+#ifndef Q_OS_MACOS
 #include <QDBusInterface>
+#endif
 
 bool avahi::installed()
 {
+#ifdef Q_OS_MACOS
+	return false;
+#else
 	return not find_executable("avahi-daemon").isEmpty();
+#endif
 }
 
 bool avahi::running()
 {
+#ifdef Q_OS_MACOS
+	return false;
+#else
 	QDBusInterface dbus = QDBusInterface("org.freedesktop.Avahi", "/", "org.freedesktop.Avahi.Server", QDBusConnection::systemBus());
 	return dbus.isValid();
+#endif
 }
 
 bool avahi::canStart()
 {
+#ifdef Q_OS_MACOS
+	return false;
+#else
 	return not(find_executable("systemctl").isEmpty() or find_executable("pkexec").isEmpty());
+#endif
 }
 
 void avahi::start()
 {
+#ifndef Q_OS_MACOS
 	auto pkexec = escape_sandbox("pkexec",
 	                             "systemctl",
 	                             "enable",
@@ -56,4 +71,5 @@ void avahi::start()
 		runningChanged(running());
 		pkexec.release()->deleteLater();
 	});
+#endif
 }

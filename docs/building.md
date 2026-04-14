@@ -1,6 +1,12 @@
 # Building
 
-# Server (PC)
+# Server (PC, Linux)
+
+## Build dependencies
+
+As Arch package names: `cmake` `ninja` `pkgconf` `eigen` `nlohmann-json` `cli11` `boost-libs` `openssl` `avahi` `glslang` `vulkan-headers` `vulkan-icd-loader`
+
+For audio support, install at least one of: `pipewire` (recommended) or `libpulse`
 
 ## Compile
 
@@ -36,11 +42,70 @@ Lighthouse driver support for use with lighthouse-tracked devices
 
 Additionally, if your environment requires absolute paths inside the OpenXR runtime manifest, you can add `-DWIVRN_OPENXR_MANIFEST_TYPE=absolute` to the build configuration.
 
+# Server (macOS)
+
+> [!WARNING]
+> The macOS port is experimental. Only bare minimum features are implemented. See the top of [README.md](../README.md) for known limitations.
+
+## Prerequisites
+
+- macOS 13 (Ventura) or later
+- Xcode Command Line Tools: `xcode-select --install`
+- [Homebrew](https://brew.sh)
+- [LunarG Vulkan SDK](https://vulkan.lunarg.com/sdk/home#mac) (1.3.261 or later) — provides MoltenVK, Vulkan headers, and `glslangValidator`
+
+## Build dependencies
+
+Install the required packages with Homebrew:
+
+```bash
+brew install cmake ninja pkg-config eigen nlohmann-json cli11 boost openssl librsvg
+```
+
+After installing the Vulkan SDK, source its environment setup script (the exact path depends on the SDK version):
+
+```bash
+source ~/VulkanSDK/<version>/setup-env.sh
+```
+
+Or add it permanently to your shell profile (e.g. `~/.zprofile`).
+
+## Compile
+
+From your checkout directory:
+
+```bash
+cmake -B build-server . -GNinja -DWIVRN_BUILD_CLIENT=OFF -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build-server
+```
+
+CMake automatically detects macOS and configures the build accordingly:
+- Uses VideoToolbox for hardware encoding
+- Uses CoreAudio for audio
+- Uses Bonjour (built into macOS) for headset discovery
+- Disables Linux-only features (systemd, avahi, etc.)
+
+The build produces two executables in `build-server/server/`:
+- `wivrn-server` — the main server process (manages connections and launches the compositor)
+- `wivrn-compositor` — the XR compositor process (spawned automatically by `wivrn-server`)
+
+## Running on macOS
+
+Run the server directly from the terminal:
+
+```bash
+./build-server/server/wivrn-server
+```
+
+Make sure the headset connects **before** launching any VR application.
+
 # Dashboard
 
 The WiVRn dashboard requires Qt6, and the WiVRn server.
 
-## Compile
+## Dashboard (Linux)
+
+### Compile
 
 From your checkout directory, compile both the server and the dashboard:
 ```bash
@@ -48,7 +113,53 @@ cmake -B build-dashboard . -GNinja -DWIVRN_BUILD_CLIENT=OFF -DWIVRN_BUILD_SERVER
 cmake --build build-dashboard
 ```
 
-See [Server](#server-pc) for the server compile options.
+See [Server (PC, Linux)](#server-pc-linux) for the server compile options.
+
+## Dashboard (macOS)
+
+The dashboard can be built on macOS alongside the server. The D-Bus interface used on Linux is automatically disabled; all other features are available.
+
+### Build dependencies
+
+The dashboard requires several KDE Frameworks 6 packages (Kirigami, KCoreAddons, KIconThemes, kirigami-addons) that are **not yet available in Homebrew** (neither Homebrew Core nor the official KDE tap). The recommended way to obtain these on macOS is via [KDE Craft](https://community.kde.org/Craft), the official KDE build framework for macOS.
+
+#### 1. Install KDE Craft
+
+Requires Python 3 and Xcode Command Line Tools (already listed in [Prerequisites](#prerequisites)):
+
+```bash
+curl https://raw.githubusercontent.com/KDE/craft/master/setup/CraftBootstrap.py -o /tmp/setup.py
+python3 /tmp/setup.py --prefix ~/CraftRoot
+```
+
+#### 2. Install KDE Framework dependencies via Craft
+
+```bash
+source ~/CraftRoot/craft/craftenv.sh
+craft kirigami
+craft kirigami-addons
+craft qcoro
+```
+
+Craft automatically resolves and builds all transitive dependencies (Qt 6, KCoreAddons, KIconThemes, extra-cmake-modules, etc.).
+
+> [!NOTE]
+> `librsvg` must be installed via **Homebrew** (`brew install librsvg`), not through Craft.
+> Craft may ship an older `fontconfig` (< 2.17.0) that conflicts with `librsvg`'s dependency
+> requirements. CMake automatically prepends Homebrew's pkgconfig paths so that Homebrew's
+> `librsvg` and its dependencies are found first, even when the Craft environment is active.
+
+### Compile
+
+Source the Craft environment, then compile both the server and the dashboard. CMake will automatically find the Qt and KDE Frameworks installed by Craft:
+
+```bash
+source ~/CraftRoot/craft/craftenv.sh
+cmake -B build-dashboard . -GNinja -DWIVRN_BUILD_CLIENT=OFF -DWIVRN_BUILD_SERVER=ON -DWIVRN_BUILD_DASHBOARD=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build-dashboard
+```
+
+The dashboard executable `wivrn-dashboard` will be placed in `build-dashboard/dashboard/`.
 
 # Client (headset)
 

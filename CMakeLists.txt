@@ -1,5 +1,16 @@
 cmake_minimum_required(VERSION 3.28)
+
+# CMAKE_OSX_DEPLOYMENT_TARGET must be set before project() on macOS.
+# Minimum 13.3 is required for std::to_chars (floating-point overloads).
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "Minimum macOS deployment version")
+endif()
+
 project(WiVRn VERSION 0.0.0 LANGUAGES C CXX)
+
+if(APPLE AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS "13.3")
+    message(FATAL_ERROR "macOS deployment target must be at least 13.3 (std::to_chars floating-point), got ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+endif()
 
 # Set default for FetchContent projects
 set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
@@ -66,11 +77,11 @@ if(APPLE)
     set(WIVRN_USE_PULSEAUDIO OFF CACHE BOOL "" FORCE)
     set(WIVRN_USE_COREAUDIO ON CACHE BOOL "" FORCE)
     set(WIVRN_USE_SYSTEMD OFF CACHE BOOL "" FORCE)
-    set(WIVRN_BUILD_DASHBOARD OFF CACHE BOOL "" FORCE)
     set(WIVRN_BUILD_WIVRNCTL OFF CACHE BOOL "" FORCE)
     set(WIVRN_BUILD_SERVER_LIBRARY OFF CACHE BOOL "" FORCE)
     set(WIVRN_FEATURE_STEAMVR_LIGHTHOUSE OFF CACHE BOOL "" FORCE)
     set(WIVRN_FEATURE_SOLARXR OFF CACHE BOOL "" FORCE)
+    set(XRT_HAVE_OPENGLES OFF CACHE BOOL "" FORCE)
 endif()
 
 set(OVR_COMPAT_SEARCH_PATH "/opt/xrizer:/usr/local/lib/OpenComposite:/usr/lib/OpenComposite:/opt/OpenComposite:/opt/opencomposite"
@@ -176,13 +187,53 @@ if (WIVRN_BUILD_SERVER)
 endif()
 
 if (WIVRN_BUILD_DASHBOARD OR WIVRN_BUILD_SERVER)
+    if(APPLE)
+        # When building in a KDE Craft environment, Craft's pkg-config may resolve
+        # fontconfig to an older version that does not satisfy librsvg's requirement
+        # (>= 2.17.0).  Prepend Homebrew's pkgconfig directories so that Homebrew's
+        # librsvg and its dependencies (including fontconfig) are preferred.
+        find_program(_BREW brew)
+        if(_BREW)
+            execute_process(
+                COMMAND ${_BREW} --prefix
+                OUTPUT_VARIABLE _HOMEBREW_PREFIX
+                OUTPUT_STRIP_TRAILING_WHITESPACE
+                ERROR_QUIET
+            )
+            if(_HOMEBREW_PREFIX)
+                set(ENV{PKG_CONFIG_PATH}
+                    "${_HOMEBREW_PREFIX}/lib/pkgconfig:${_HOMEBREW_PREFIX}/share/pkgconfig:$ENV{PKG_CONFIG_PATH}"
+                )
+            endif()
+        endif()
+        unset(_BREW CACHE)
+        unset(_HOMEBREW_PREFIX)
+    endif()
     pkg_check_modules(librsvg-2.0 REQUIRED IMPORTED_TARGET librsvg-2.0)
+    if(APPLE)
+        # pkg-config on macOS may report SDK include paths that do not exist
+        # (e.g. MacOSX26.sdk/usr/include/ffi). Filter them out to avoid a
+        # CMake error about non-existent INTERFACE_INCLUDE_DIRECTORIES.
+        get_target_property(_rsvg_incdirs PkgConfig::librsvg-2.0 INTERFACE_INCLUDE_DIRECTORIES)
+        if(_rsvg_incdirs)
+            foreach(_dir IN LISTS _rsvg_incdirs)
+                if(NOT EXISTS "${_dir}")
+                    list(REMOVE_ITEM _rsvg_incdirs "${_dir}")
+                endif()
+            endforeach()
+            set_target_properties(PkgConfig::librsvg-2.0 PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_rsvg_incdirs}")
+        endif()
+    endif()
     find_package(LibArchive REQUIRED)
     find_package(PNG REQUIRED)
 endif()
 
 if (WIVRN_BUILD_DASHBOARD)
-    find_package(Qt6 REQUIRED COMPONENTS Core Quick Test Gui QuickControls2 Widgets Network)
+    if(APPLE)
+        find_package(Qt6 REQUIRED COMPONENTS Core Quick Test Gui QuickControls2 Widgets Network)
+    else()
+        find_package(Qt6 REQUIRED COMPONENTS Core Quick Test Gui QuickControls2 Widgets Network DBus)
+    endif()
 
     if(Qt6_VERSION VERSION_GREATER_EQUAL 6.10.0)
         # QtCoro needs this for Qt 6.10 and (currently) doesn't do this by itself
@@ -192,7 +243,7 @@ if (WIVRN_BUILD_DASHBOARD)
     find_package(ECM 5.115 REQUIRED NO_MODULE)
     list(APPEND CMAKE_MODULE_PATH "${ECM_MODULE_PATH}")
 
-    find_package(KF6 REQUIRED COMPONENTS Kirigami I18n CoreAddons QQC2DesktopStyle IconThemes)
+    find_package(KF6 REQUIRED COMPONENTS Kirigami I18n CoreAddons IconThemes)
     find_package(KF6Kirigami)
     find_package(nlohmann_json REQUIRED)
     find_package(QCoro6 REQUIRED COMPONENTS Core Network Qml)
